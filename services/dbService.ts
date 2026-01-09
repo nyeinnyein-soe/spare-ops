@@ -2,119 +2,89 @@
 import { User, RequestRecord, UsageRecord, INITIAL_USERS } from "../types";
 
 /**
- * LOCAL STORAGE DATABASE SERVICE
- * 
- * This service provides a "Database" experience using the browser's storage.
- * It maintains the same interface as an API client, making it easy to swap later.
+ * DATABASE SERVICE (MOCKING SQL OPERATIONS)
+ * In a real app, these would be fetch() calls to a Node.js/MySQL backend.
  */
 
 const STORAGE_KEYS = {
-  USERS: 'spareops_local_users',
-  REQUESTS: 'spareops_local_requests',
-  USAGES: 'spareops_local_usages'
+  USERS: 'spareops_db_users',
+  REQUESTS: 'spareops_db_requests',
+  USAGES: 'spareops_db_usages'
 };
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const getRaw = (key: string) => JSON.parse(localStorage.getItem(key) || '[]');
+const saveRaw = (key: string, data: any) => localStorage.getItem(key) === null && key === STORAGE_KEYS.USERS 
+  ? localStorage.setItem(key, JSON.stringify(INITIAL_USERS)) 
+  : localStorage.setItem(key, JSON.stringify(data));
 
-const getData = <T>(key: string): T[] => {
-  const data = localStorage.getItem(key);
-  return data ? JSON.parse(data) : [];
-};
-
-const setData = <T>(key: string, data: T[]) => {
-  localStorage.setItem(key, JSON.stringify(data));
-};
-
-// Initialize Users if empty
-if (getData(STORAGE_KEYS.USERS).length === 0) {
-  setData(STORAGE_KEYS.USERS, INITIAL_USERS);
-}
+// Initialize if empty
+if (!localStorage.getItem(STORAGE_KEYS.USERS)) saveRaw(STORAGE_KEYS.USERS, INITIAL_USERS);
 
 export const db = {
-  // Always returns true for local version
-  ping: async (): Promise<boolean> => {
-    await delay(100);
-    return true;
-  },
-
   users: {
     select: async (): Promise<User[]> => {
-      await delay(200);
-      return getData<User>(STORAGE_KEYS.USERS);
+      return getRaw(STORAGE_KEYS.USERS);
     },
     insert: async (user: User): Promise<void> => {
-      await delay(200);
-      const data = getData<User>(STORAGE_KEYS.USERS);
-      data.push(user);
-      setData(STORAGE_KEYS.USERS, data);
+      const users = getRaw(STORAGE_KEYS.USERS);
+      users.push(user);
+      saveRaw(STORAGE_KEYS.USERS, users);
     },
     update: async (user: User): Promise<void> => {
-      await delay(200);
-      const data = getData<User>(STORAGE_KEYS.USERS);
-      const index = data.findIndex(u => u.id === user.id);
+      const users = getRaw(STORAGE_KEYS.USERS);
+      const index = users.findIndex((u: User) => u.id === user.id);
       if (index !== -1) {
-        data[index] = user;
-        setData(STORAGE_KEYS.USERS, data);
+        users[index] = user;
+        saveRaw(STORAGE_KEYS.USERS, users);
       }
     },
     delete: async (id: string): Promise<void> => {
-      await delay(200);
-      const data = getData<User>(STORAGE_KEYS.USERS);
-      setData(STORAGE_KEYS.USERS, data.filter(u => u.id !== id));
+      const users = getRaw(STORAGE_KEYS.USERS);
+      saveRaw(STORAGE_KEYS.USERS, users.filter((u: User) => u.id !== id));
     }
   },
-
   requests: {
     select: async (): Promise<RequestRecord[]> => {
-      await delay(200);
-      return getData<RequestRecord>(STORAGE_KEYS.REQUESTS);
+      return getRaw(STORAGE_KEYS.REQUESTS);
     },
     insert: async (req: RequestRecord): Promise<void> => {
-      await delay(200);
-      const data = getData<RequestRecord>(STORAGE_KEYS.REQUESTS);
-      data.unshift(req);
-      setData(STORAGE_KEYS.REQUESTS, data);
+      const items = getRaw(STORAGE_KEYS.REQUESTS);
+      items.unshift(req);
+      saveRaw(STORAGE_KEYS.REQUESTS, items);
     },
     update: async (req: RequestRecord): Promise<void> => {
-      await delay(200);
-      const data = getData<RequestRecord>(STORAGE_KEYS.REQUESTS);
-      const index = data.findIndex(r => r.id === req.id);
+      const items = getRaw(STORAGE_KEYS.REQUESTS);
+      const index = items.findIndex((r: RequestRecord) => r.id === req.id);
       if (index !== -1) {
-        data[index] = req;
-        setData(STORAGE_KEYS.REQUESTS, data);
+        items[index] = req;
+        saveRaw(STORAGE_KEYS.REQUESTS, items);
       }
     },
     delete: async (id: string): Promise<void> => {
-      await delay(200);
-      const data = getData<RequestRecord>(STORAGE_KEYS.REQUESTS);
-      setData(STORAGE_KEYS.REQUESTS, data.filter(r => r.id !== id));
+      const items = getRaw(STORAGE_KEYS.REQUESTS);
+      saveRaw(STORAGE_KEYS.REQUESTS, items.filter((r: RequestRecord) => r.id !== id));
     }
   },
-
   usages: {
     select: async (): Promise<UsageRecord[]> => {
-      await delay(200);
-      return getData<UsageRecord>(STORAGE_KEYS.USAGES);
+      return getRaw(STORAGE_KEYS.USAGES);
     },
     insert: async (usage: UsageRecord): Promise<void> => {
-      await delay(200);
-      const data = getData<UsageRecord>(STORAGE_KEYS.USAGES);
-      data.unshift(usage);
-      setData(STORAGE_KEYS.USAGES, data);
+      const items = getRaw(STORAGE_KEYS.USAGES);
+      items.unshift(usage);
+      saveRaw(STORAGE_KEYS.USAGES, items);
     },
     update: async (usage: UsageRecord): Promise<void> => {
-      await delay(200);
-      const data = getData<UsageRecord>(STORAGE_KEYS.USAGES);
-      const index = data.findIndex(u => u.id === usage.id);
+      const items = getRaw(STORAGE_KEYS.USAGES);
+      const index = items.findIndex((u: UsageRecord) => u.id === usage.id);
       if (index !== -1) {
-        data[index] = usage;
-        setData(STORAGE_KEYS.USAGES, data);
+        items[index] = usage;
+        saveRaw(STORAGE_KEYS.USAGES, items);
       }
     },
     delete: async (id: string): Promise<void> => {
-      await delay(200);
-      const data = getData<UsageRecord>(STORAGE_KEYS.USAGES);
-      setData(STORAGE_KEYS.USAGES, data.filter(u => u.id !== id));
+      const items = getRaw(STORAGE_KEYS.USAGES);
+      saveRaw(STORAGE_KEYS.USAGES, items.filter((u: UsageRecord) => u.id !== id));
     }
   }
 };
