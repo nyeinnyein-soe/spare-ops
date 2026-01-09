@@ -1,0 +1,7 @@
+{
+  "name": "SpareOps - Sales Inventory Manager",
+  "description": "A comprehensive system for Sales Teams to request, receive, and track usage of spare equipment like chargers, cables, and batteries in various shops, featuring an administrative approval workflow.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
