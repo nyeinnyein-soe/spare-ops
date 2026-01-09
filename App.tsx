@@ -29,7 +29,11 @@ import {
   X,
   Search,
   Save,
-  Loader2
+  Loader2,
+  Filter,
+  RotateCcw,
+  Calendar,
+  ShieldAlert
 } from 'lucide-react';
 import { 
   PartType, 
@@ -57,24 +61,28 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Initial Data Fetch (Simulating SQL SELECT *)
-  useEffect(() => {
-    const initData = async () => {
-      setLoading(true);
+  const syncData = async () => {
+    setLoading(true);
+    try {
       const [u, r, usg] = await Promise.all([
         db.users.select(),
         db.requests.select(),
         db.usages.select()
       ]);
-      setUsers(u);
-      setRequests(r);
-      setUsages(usg);
+      setUsers(u || []);
+      setRequests(r || []);
+      setUsages(usg || []);
+    } catch (err) {
+      console.error("Sync error:", err);
+    } finally {
       setLoading(false);
-    };
-    initData();
+    }
+  };
+
+  useEffect(() => {
+    syncData();
   }, []);
 
-  // Sync session
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('spareops_current_session', JSON.stringify(currentUser));
@@ -88,9 +96,7 @@ export default function App() {
     setView('dashboard');
   };
 
-  // --- DATABASE OPERATIONS (CRUD) ---
-
-  const handleCreateUser = async (name: string, role: 'admin' | 'sales', password: string) => {
+  const handleCreateUser = async (name: string, role: 'admin' | 'manager' | 'sales', password: string) => {
     const newUser: User = {
       id: `user-${Date.now()}`,
       name, role, password,
@@ -108,7 +114,7 @@ export default function App() {
 
   const handleDeleteUser = async (id: string) => {
     if (currentUser?.id === id) return alert("Cannot delete self.");
-    if (confirm("Are you sure you want to delete this user? All their history will remain but they cannot login.")) {
+    if (confirm("Permanently delete this user from database?")) {
       await db.users.delete(id);
       setUsers(await db.users.select());
     }
@@ -158,35 +164,45 @@ export default function App() {
             .forEach(r => r.items.forEach(i => counts[i.type] = (counts[i.type] || 0) + i.quantity));
     usages.filter(u => u.salespersonId === currentUser.id)
           .forEach(u => counts[u.partType] = (counts[u.partType] || 0) - 1);
-    return Object.entries(counts).filter(([_, q]) => q! > 0).map(([t, q]) => ({ type: t as PartType, quantity: q! }));
+    return Object.entries(counts)
+      .filter(([_, q]) => (q || 0) > 0)
+      .map(([t, q]) => ({ type: t as PartType, quantity: q || 0 }));
   }, [requests, usages, currentUser]);
 
   if (!currentUser) return <Login users={users} onLogin={setCurrentUser} />;
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-indigo-600" size={48} /></div>;
+  if (loading && requests.length === 0) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-indigo-600" size={48} /></div>;
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
       <nav className="w-full md:w-64 bg-white border-r border-slate-200 p-4 flex flex-col gap-2 shadow-sm shrink-0 z-30">
         <div className="flex items-center gap-2 px-2 py-4 mb-4 border-b">
-          <div className="bg-indigo-600 p-2 rounded-lg text-white"><Package size={24} /></div>
+          <div className="bg-indigo-600 p-2 rounded-lg text-white shadow-lg shadow-indigo-200"><Package size={24} /></div>
           <span className="font-bold text-xl tracking-tight text-slate-800">SpareOps</span>
         </div>
+        
         <NavItem icon={<LayoutDashboard size={20}/>} label="Dashboard" active={view === 'dashboard'} onClick={() => setView('dashboard')} />
+        
         {currentUser.role === 'sales' && <NavItem icon={<PlusCircle size={20}/>} label="New Request" active={view === 'form'} onClick={() => setView('form')} />}
+        
         <NavItem icon={<History size={20}/>} label="Activity Log" active={view === 'history'} onClick={() => setView('history')} />
-        {currentUser.role === 'admin' && (
+        
+        {(currentUser.role === 'admin' || currentUser.role === 'manager') && (
           <>
-            <NavItem icon={<UsersIcon size={20}/>} label="User Accounts" active={view === 'users'} onClick={() => setView('users')} />
-            <NavItem icon={<FileText size={20}/>} label="Manage Reports" active={view === 'reports'} onClick={() => setView('reports')} />
-            <NavItem icon={<Sparkles size={20}/>} label="AI Insights" active={view === 'insights'} onClick={() => setView('insights')} />
+            <NavItem icon={<UsersIcon size={20}/>} label="Staff Directory" active={view === 'users'} onClick={() => setView('users')} />
+            <NavItem icon={<FileText size={20}/>} label="Audit Reports" active={view === 'reports'} onClick={() => setView('reports')} />
           </>
         )}
-        <div className="mt-auto pt-4 border-t">
-          <div className="px-3 py-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-3 mb-2">
+
+        {currentUser.role === 'admin' && (
+          <NavItem icon={<Sparkles size={20}/>} label="AI Insights" active={view === 'insights'} onClick={() => setView('insights')} />
+        )}
+
+        <div className="mt-auto pt-4 border-t space-y-4">
+          <div className="px-3 py-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-3">
             <div className={`h-8 w-8 rounded-full ${currentUser.avatarColor} flex items-center justify-center text-white text-xs font-bold`}>{currentUser.name.charAt(0)}</div>
             <div className="overflow-hidden">
               <div className="text-sm font-bold text-slate-900 truncate">{currentUser.name}</div>
-              <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{currentUser.role}</div>
+              <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest">{currentUser.role}</div>
             </div>
           </div>
           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-lg font-semibold text-sm transition-all"><LogOut size={18} />Logout</button>
@@ -195,23 +211,40 @@ export default function App() {
 
       <main className="flex-1 p-6 md:p-10 overflow-auto">
         <header className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 capitalize">{view === 'users' ? 'User Management' : view === 'reports' ? 'Manage Reports' : view}</h1>
+          <h1 className="text-2xl font-bold text-slate-900 capitalize">
+            {view === 'users' ? 'Staff Management' : view === 'reports' ? 'Audit & Reports' : view}
+          </h1>
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-slate-200 shadow-sm">
-            {currentUser.role === 'admin' ? <ShieldCheck size={16} className="text-indigo-600" /> : <UserIcon size={16} className="text-emerald-600" />}
-            <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">{currentUser.role} Mode</span>
+            {currentUser.role === 'admin' ? <ShieldCheck size={16} className="text-indigo-600" /> : 
+             currentUser.role === 'manager' ? <ShieldAlert size={16} className="text-amber-600" /> :
+             <UserIcon size={16} className="text-emerald-600" />}
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+              {currentUser.role} Session
+            </span>
           </div>
         </header>
 
         <section className="max-w-6xl mx-auto">
           {view === 'dashboard' && (
-            currentUser.role === 'admin' ? 
-              <AdminDashboard requests={requests} usages={usages} onApprove={(id) => handleUpdateStatus(id, RequestStatus.APPROVED)} onReject={(id) => handleUpdateStatus(id, RequestStatus.REJECTED)} /> : 
-              <SalesDashboard requests={requests.filter(r => r.requesterId === currentUser.id)} onHand={onHandInventory} onMarkReceived={(id) => handleUpdateStatus(id, RequestStatus.RECEIVED)} onLogUsage={handleLogUsage} />
+            currentUser.role !== 'sales' ? 
+              <AdminDashboard 
+                requests={requests} 
+                usages={usages} 
+                onApprove={(id) => handleUpdateStatus(id, RequestStatus.APPROVED)} 
+                onReject={(id) => handleUpdateStatus(id, RequestStatus.REJECTED)} 
+                userRole={currentUser.role} 
+              /> : 
+              <SalesDashboard 
+                requests={requests.filter(r => r.requesterId === currentUser.id)} 
+                onHand={onHandInventory} 
+                onMarkReceived={(id) => handleUpdateStatus(id, RequestStatus.RECEIVED)} 
+                onLogUsage={handleLogUsage} 
+              />
           )}
           {view === 'form' && <RequestForm onSubmit={handleCreateRequest} onCancel={() => setView('dashboard')} />}
-          {view === 'history' && <ActivityLog requests={currentUser.role === 'admin' ? requests : requests.filter(r => r.requesterId === currentUser.id)} usages={currentUser.role === 'admin' ? usages : usages.filter(u => u.salespersonId === currentUser.id)} userRole={currentUser.role} />}
-          {view === 'users' && <UserManagement users={users} onAddUser={handleCreateUser} onDeleteUser={handleDeleteUser} onUpdateUser={handleUpdateUser} />}
-          {view === 'reports' && <ReportsManager requests={requests} usages={usages} setRequests={setRequests} setUsages={setUsages} />}
+          {view === 'history' && <ActivityLog requests={currentUser.role !== 'sales' ? requests : requests.filter(r => r.requesterId === currentUser.id)} usages={currentUser.role !== 'sales' ? usages : usages.filter(u => u.salespersonId === currentUser.id)} userRole={currentUser.role} />}
+          {view === 'users' && <UserManagement users={users} currentUserRole={currentUser.role} onAddUser={handleCreateUser} onDeleteUser={handleDeleteUser} onUpdateUser={handleUpdateUser} />}
+          {view === 'reports' && <ReportsManager requests={requests} usages={usages} setRequests={setRequests} setUsages={setUsages} refresh={syncData} userRole={currentUser.role} />}
           {view === 'insights' && <InsightsView usages={usages} requests={requests} isAnalyzing={isAnalyzing} setIsAnalyzing={setIsAnalyzing} aiInsights={aiInsights} setAiInsights={setAiInsights} />}
         </section>
       </main>
@@ -222,72 +255,116 @@ export default function App() {
 // --- SUB-COMPONENTS ---
 
 function Login({ users, onLogin }: { users: User[], onLogin: (user: User) => void }) {
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedUser?.password === password) onLogin(selectedUser);
-    else setError('Incorrect password.');
+    const found = users.find(u => u.name.toLowerCase() === username.trim().toLowerCase() && u.password === password);
+    if (found) {
+      onLogin(found);
+    } else {
+      setError('Invalid username or password.');
+    }
   };
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 relative overflow-hidden font-sans">
-      <div className="w-full max-w-md bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 p-10 shadow-2xl relative z-10">
+      <div className="w-full max-w-md bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 p-10 shadow-2xl relative z-10 animate-in zoom-in-95 duration-300">
         <div className="text-center mb-10">
-          <div className="h-16 w-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-lg shadow-indigo-500/40"><Package size={32} /></div>
-          <h1 className="text-3xl font-bold text-white mb-2">SpareOps</h1>
-          <p className="text-slate-400 text-sm">Secure Sales Inventory</p>
+          <div className="h-20 w-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white mx-auto mb-6 shadow-2xl shadow-indigo-500/40"><Package size={40} /></div>
+          <h1 className="text-4xl font-black text-white mb-2 tracking-tight">SpareOps</h1>
+          <p className="text-slate-400 text-sm font-medium">Internal Inventory Control</p>
         </div>
 
-        {!selectedUser ? (
-          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-            {users.map(u => (
-              <button key={u.id} onClick={() => setSelectedUser(u)} className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all">
-                <div className="flex items-center gap-4 text-left">
-                  <div className={`h-12 w-12 rounded-xl ${u.avatarColor} flex items-center justify-center text-white font-bold text-lg`}>{u.name.charAt(0)}</div>
-                  <div><div className="text-white font-bold">{u.name}</div><div className="text-xs font-bold text-slate-500 uppercase">{u.role}</div></div>
-                </div>
-                <ChevronRight className="text-slate-600" size={20} />
-              </button>
-            ))}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Username</label>
+            <div className="relative">
+              <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input 
+                autoFocus 
+                type="text" 
+                value={username} 
+                onChange={e => setUsername(e.target.value)} 
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-600" 
+                placeholder="Enter staff name" 
+              />
+            </div>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
-              <div className={`h-10 w-10 rounded-xl ${selectedUser.avatarColor} flex items-center justify-center text-white font-bold`}>{selectedUser.name.charAt(0)}</div>
-              <div className="flex-1 font-bold text-white">{selectedUser.name}</div>
-              <button type="button" onClick={() => setSelectedUser(null)} className="text-slate-400 hover:text-white text-xs font-bold underline">Change</button>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest px-1">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input 
+                type={showPassword ? 'text' : 'password'} 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-4 pl-12 pr-12 text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-600" 
+                placeholder="Password" 
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)} 
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
-            <div className="space-y-2">
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                <input autoFocus type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-12 text-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter password" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
-              </div>
+          </div>
+
+          {error && (
+            <div className="text-rose-400 text-xs font-bold text-center bg-rose-400/10 py-3 rounded-xl border border-rose-400/20 animate-in fade-in duration-300">
+              {error}
             </div>
-            {error && <div className="text-rose-400 text-xs font-bold text-center">{error}</div>}
-            <button type="submit" className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black transition-all shadow-xl">Sign In</button>
-          </form>
-        )}
+          )}
+          
+          <button type="submit" className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black transition-all shadow-xl active:scale-95">
+            Log In System
+          </button>
+        </form>
       </div>
     </div>
   );
 }
 
-// --- REPORTS MANAGER (Full CRUD on Usage & Requests) ---
+// --- REPORTS MANAGER ---
 
-function ReportsManager({ requests, usages, setRequests, setUsages }: { requests: RequestRecord[], usages: UsageRecord[], setRequests: any, setUsages: any }) {
+function ReportsManager({ requests, usages, setRequests, setUsages, refresh, userRole }: any) {
   const [tab, setTab] = useState<'usage' | 'request'>('usage');
   const [editingUsage, setEditingUsage] = useState<UsageRecord | null>(null);
-  const [editingRequest, setEditingRequest] = useState<RequestRecord | null>(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const filteredUsages = useMemo(() => {
+    return usages.filter((u: UsageRecord) => {
+      const date = new Date(u.usedAt);
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+      if (start) start.setHours(0,0,0,0);
+      if (end) end.setHours(23,59,59,999);
+      return (!start || date >= start) && (!end || date <= end);
+    });
+  }, [usages, startDate, endDate]);
+
+  const filteredRequests = useMemo(() => {
+    return requests.filter((r: RequestRecord) => {
+      const date = new Date(r.createdAt);
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+      if (start) start.setHours(0,0,0,0);
+      if (end) end.setHours(23,59,59,999);
+      return (!start || date >= start) && (!end || date <= end);
+    });
+  }, [requests, startDate, endDate]);
 
   const handleDeleteUsage = async (id: string) => {
     if (confirm("Delete this usage log? This will adjust on-hand inventory.")) {
       await db.usages.delete(id);
-      setUsages(await db.usages.select());
+      await refresh();
     }
   };
 
@@ -295,7 +372,7 @@ function ReportsManager({ requests, usages, setRequests, setUsages }: { requests
     e.preventDefault();
     if (editingUsage) {
       await db.usages.update(editingUsage);
-      setUsages(await db.usages.select());
+      await refresh();
       setEditingUsage(null);
     }
   };
@@ -303,75 +380,112 @@ function ReportsManager({ requests, usages, setRequests, setUsages }: { requests
   const handleDeleteRequest = async (id: string) => {
     if (confirm("Delete this request record permanently?")) {
       await db.requests.delete(id);
-      setRequests(await db.requests.select());
+      await refresh();
     }
   };
 
+  const canEditReports = userRole === 'admin';
+
   return (
     <div className="space-y-6">
-      <div className="flex p-1 bg-slate-200/50 rounded-xl w-fit">
-        <button onClick={() => setTab('usage')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'usage' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Usage Logs</button>
-        <button onClick={() => setTab('request')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'request' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Requests</button>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex p-1 bg-slate-200/50 rounded-xl w-fit">
+          <button onClick={() => setTab('usage')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'usage' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Deployments</button>
+          <button onClick={() => setTab('request')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'request' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Requisitions</button>
+        </div>
+
+        <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+          <Calendar size={16} className="text-slate-400 ml-1" />
+          <input 
+            type="date" 
+            value={startDate} 
+            onChange={e => setStartDate(e.target.value)} 
+            className="text-xs font-bold outline-none border-none bg-transparent"
+          />
+          <span className="text-slate-300 text-xs">to</span>
+          <input 
+            type="date" 
+            value={endDate} 
+            onChange={e => setEndDate(e.target.value)} 
+            className="text-xs font-bold outline-none border-none bg-transparent"
+          />
+          {(startDate || endDate) && (
+            <button onClick={() => {setStartDate(''); setEndDate('');}} className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg">
+              <RotateCcw size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-300">
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b">
             <tr>
               <th className="px-6 py-4">Date</th>
               <th className="px-6 py-4">{tab === 'usage' ? 'Shop' : 'Requester'}</th>
               <th className="px-6 py-4">Item(s)</th>
-              <th className="px-6 py-4">Status / Salesperson</th>
-              <th className="px-6 py-4 text-right">Actions</th>
+              <th className="px-6 py-4">Status / Staff</th>
+              {canEditReports && <th className="px-6 py-4 text-right">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y text-sm">
-            {tab === 'usage' ? usages.map(u => (
-              <tr key={u.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 text-slate-500">{new Date(u.usedAt).toLocaleDateString()}</td>
-                <td className="px-6 py-4 font-bold">{u.shopName}</td>
-                <td className="px-6 py-4 text-indigo-600 font-bold">{u.partType}</td>
-                <td className="px-6 py-4 font-medium">{u.salespersonName}</td>
-                <td className="px-6 py-4 text-right flex justify-end gap-2">
-                  <button onClick={() => setEditingUsage(u)} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 size={16}/></button>
-                  <button onClick={() => handleDeleteUsage(u.id)} className="p-2 text-slate-400 hover:text-rose-600"><Trash2 size={16}/></button>
-                </td>
-              </tr>
-            )) : requests.map(r => (
-              <tr key={r.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 text-slate-500">{new Date(r.createdAt).toLocaleDateString()}</td>
-                <td className="px-6 py-4 font-bold">{r.requesterName}</td>
-                <td className="px-6 py-4">{r.items.map(i => `${i.quantity}x ${i.type}`).join(', ')}</td>
-                <td className="px-6 py-4"><StatusBadge status={r.status} /></td>
-                <td className="px-6 py-4 text-right flex justify-end gap-2">
-                  <button onClick={() => handleDeleteRequest(r.id)} className="p-2 text-slate-400 hover:text-rose-600"><Trash2 size={16}/></button>
-                </td>
-              </tr>
-            ))}
+            {tab === 'usage' ? (
+              filteredUsages.length === 0 ? <tr><td colSpan={canEditReports ? 5 : 4} className="p-10 text-center text-slate-400 italic">No logs found in this period.</td></tr> :
+              filteredUsages.map(u => (
+                <tr key={u.id} className="hover:bg-slate-50 group transition-colors">
+                  <td className="px-6 py-4 text-slate-500">{new Date(u.usedAt).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 font-bold">{u.shopName}</td>
+                  <td className="px-6 py-4 text-indigo-600 font-bold">{u.partType}</td>
+                  <td className="px-6 py-4 font-medium">{u.salespersonName}</td>
+                  {canEditReports && (
+                    <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => setEditingUsage(u)} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 size={16}/></button>
+                      <button onClick={() => handleDeleteUsage(u.id)} className="p-2 text-slate-400 hover:text-rose-600"><Trash2 size={16}/></button>
+                    </td>
+                  )}
+                </tr>
+              ))
+            ) : (
+              filteredRequests.length === 0 ? <tr><td colSpan={canEditReports ? 5 : 4} className="p-10 text-center text-slate-400 italic">No requests found in this period.</td></tr> :
+              filteredRequests.map(r => (
+                <tr key={r.id} className="hover:bg-slate-50 group transition-colors">
+                  <td className="px-6 py-4 text-slate-500">{new Date(r.createdAt).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 font-bold">{r.requesterName}</td>
+                  <td className="px-6 py-4">{r.items.map(i => `${i.quantity}x ${i.type}`).join(', ')}</td>
+                  <td className="px-6 py-4"><StatusBadge status={r.status} /></td>
+                  {canEditReports && (
+                    <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleDeleteRequest(r.id)} className="p-2 text-slate-400 hover:text-rose-600"><Trash2 size={16}/></button>
+                    </td>
+                  )}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* Edit Usage Modal */}
       {editingUsage && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-6 z-50 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Edit Usage Entry</h2>
+              <h2 className="text-xl font-bold">Edit Transaction</h2>
               <button onClick={() => setEditingUsage(null)}><X /></button>
             </div>
             <form onSubmit={handleUpdateUsage} className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Shop Name</label>
-                <input value={editingUsage.shopName} onChange={e => setEditingUsage({...editingUsage, shopName: e.target.value})} className="w-full p-3 border rounded-xl mt-1 outline-none focus:border-indigo-500" />
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Shop Name</label>
+                <input value={editingUsage.shopName} onChange={e => setEditingUsage({...editingUsage, shopName: e.target.value})} className="w-full p-4 border rounded-xl mt-1 outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Part Type</label>
-                <select value={editingUsage.partType} onChange={e => setEditingUsage({...editingUsage, partType: e.target.value as PartType})} className="w-full p-3 border rounded-xl mt-1 outline-none">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Equipment Type</label>
+                <select value={editingUsage.partType} onChange={e => setEditingUsage({...editingUsage, partType: e.target.value as PartType})} className="w-full p-4 border rounded-xl mt-1 outline-none">
                   {SPARE_PARTS.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
-              <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-2"><Save size={18}/>Update SQL Entry</button>
+              <button type="submit" className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg hover:bg-indigo-700 transition-all">
+                <Save size={18}/> Commit Update
+              </button>
             </form>
           </div>
         </div>
@@ -380,14 +494,24 @@ function ReportsManager({ requests, usages, setRequests, setUsages }: { requests
   );
 }
 
-// --- USER MANAGEMENT (CRUD) ---
+// --- USER MANAGEMENT ---
 
-function UserManagement({ users, onAddUser, onDeleteUser, onUpdateUser }: { users: User[], onAddUser: any, onDeleteUser: any, onUpdateUser: any }) {
+function UserManagement({ users, currentUserRole, onAddUser, onDeleteUser, onUpdateUser }: { 
+  users: User[], 
+  currentUserRole: 'admin' | 'manager' | 'sales', 
+  onAddUser: any, 
+  onDeleteUser: any, 
+  onUpdateUser: any 
+}) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState({ name: '', role: 'sales' as 'admin' | 'sales', password: '' });
+  const [formData, setFormData] = useState({ name: '', role: 'sales' as 'admin' | 'manager' | 'sales', password: '' });
 
-  const reset = () => { setFormData({ name: '', role: 'sales', password: '' }); setIsAdding(false); setEditingUser(null); };
+  const reset = () => { 
+    setFormData({ name: '', role: 'sales', password: '' }); 
+    setIsAdding(false); 
+    setEditingUser(null); 
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -396,52 +520,172 @@ function UserManagement({ users, onAddUser, onDeleteUser, onUpdateUser }: { user
     reset();
   };
 
-  const startEdit = (u: User) => { setEditingUser(u); setFormData({ name: u.name, role: u.role, password: u.password }); setIsAdding(true); };
+  const canManage = (user: User) => {
+    if (currentUserRole === 'admin') return true;
+    if (currentUserRole === 'manager') return user.role !== 'admin';
+    return false;
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold text-slate-800">Account Control</h2>
-        <button onClick={() => setIsAdding(!isAdding)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all">
-          {isAdding ? <XCircle size={18}/> : <UserPlus size={18}/>}{isAdding ? 'Cancel' : 'New User'}
+        <h2 className="text-xl font-bold text-slate-800 tracking-tight">Staff Account Management</h2>
+        <button onClick={() => setIsAdding(!isAdding)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition-all shadow-xl shadow-indigo-100">
+          {isAdding ? <XCircle size={18}/> : <UserPlus size={18}/>}{isAdding ? 'Cancel' : 'Register New User'}
         </button>
       </div>
 
       {isAdding && (
-        <form onSubmit={handleSubmit} className="bg-white p-8 rounded-3xl border border-indigo-100 shadow-xl space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><label className="text-[10px] font-black uppercase text-slate-400">Full Name</label><input autoFocus value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-3 border rounded-xl mt-1 outline-none" required /></div>
-            <div><label className="text-[10px] font-black uppercase text-slate-400">Role</label><select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as any})} className="w-full p-3 border rounded-xl mt-1"><option value="sales">Sales</option><option value="admin">Admin</option></select></div>
-            <div className="md:col-span-2"><label className="text-[10px] font-black uppercase text-slate-400">Password</label><input value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-3 border rounded-xl mt-1 outline-none" required /></div>
+        <form onSubmit={handleSubmit} className="bg-white p-10 rounded-3xl border border-indigo-100 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Full Staff Name</label>
+              <input autoFocus value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-4 border rounded-xl outline-none focus:border-indigo-500 shadow-sm" required />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Role Permission</label>
+              <select 
+                value={formData.role} 
+                onChange={e => setFormData({...formData, role: e.target.value as any})} 
+                className="w-full p-4 border rounded-xl outline-none shadow-sm"
+              >
+                <option value="sales">Sales Representative</option>
+                <option value="manager">Regional Manager</option>
+                {currentUserRole === 'admin' && <option value="admin">System Administrator</option>}
+              </select>
+            </div>
+            <div className="md:col-span-2 space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Access Password</label>
+              <input value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full p-4 border rounded-xl outline-none focus:border-indigo-500 shadow-sm" required />
+            </div>
           </div>
-          <button type="submit" className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold">{editingUser ? 'Update Account' : 'Create Account'}</button>
+          <button type="submit" className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 transition-all hover:bg-indigo-700 active:scale-95">
+            {editingUser ? 'Update Database Record' : 'Create System Account'}
+          </button>
         </form>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="divide-y">
-          {users.map(u => (
-            <div key={u.id} className="p-4 flex items-center justify-between group">
-              <div className="flex items-center gap-4">
-                <div className={`h-10 w-10 rounded-xl ${u.avatarColor} flex items-center justify-center text-white font-bold`}>{u.name.charAt(0)}</div>
-                <div><div className="font-bold flex items-center gap-2">{u.name}{u.role === 'admin' && <ShieldCheck size={14} className="text-indigo-500" />}</div><div className="text-[10px] text-slate-400 font-bold uppercase">{u.role}</div></div>
+          {users.map((u: User) => {
+            const allowed = canManage(u);
+            return (
+              <div key={u.id} className="p-6 flex items-center justify-between group hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-5">
+                  <div className={`h-14 w-14 rounded-2xl ${u.avatarColor} flex items-center justify-center text-white font-black text-xl shadow-inner`}>{u.name.charAt(0)}</div>
+                  <div>
+                    <div className="font-bold text-slate-900 flex items-center gap-2 text-lg">
+                      {u.name}
+                      {u.role === 'admin' ? <ShieldCheck size={16} className="text-indigo-600" /> : 
+                       u.role === 'manager' ? <ShieldAlert size={16} className="text-amber-600" /> : 
+                       <UserIcon size={16} className="text-emerald-600" />}
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{u.role} Account</div>
+                  </div>
+                </div>
+                
+                {allowed ? (
+                  <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => { setEditingUser(u); setFormData({name: u.name, role: u.role, password: u.password}); setIsAdding(true); }} className="p-3 text-slate-400 hover:text-indigo-600 bg-white border rounded-xl shadow-sm transition-all"><Edit2 size={20}/></button>
+                    <button onClick={() => onDeleteUser(u.id)} className="p-3 text-slate-400 hover:text-rose-600 bg-white border rounded-xl shadow-sm transition-all"><Trash2 size={20}/></button>
+                  </div>
+                ) : (
+                  <div className="px-4 py-2 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                    <Lock size={12} /> Restricted
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => startEdit(u)} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 size={18}/></button>
-                <button onClick={() => onDeleteUser(u.id)} className="p-2 text-slate-400 hover:text-rose-600"><Trash2 size={18}/></button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
   );
 }
 
-// --- SALES DASHBOARD (Image Upload Permission) ---
+// --- DASHBOARD WRAPPERS ---
 
-function SalesDashboard({ requests, onHand, onMarkReceived, onLogUsage }: { requests: RequestRecord[], onHand: any, onMarkReceived: any, onLogUsage: any }) {
-  const approved = requests.filter(r => r.status === RequestStatus.APPROVED);
+function AdminDashboard({ requests, usages, onApprove, onReject, userRole }: any) {
+  const pending = requests.filter((r: any) => r.status === RequestStatus.PENDING);
+  const recentUsages = usages.slice(0, 10); // Show latest 10 deployments
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard label="Pending Action" value={pending.length.toString()} icon={<ClipboardList className="text-amber-500"/>}/>
+        <StatCard label="Live Utilization" value={usages.length.toString()} icon={<Store className="text-indigo-500"/>}/>
+        <StatCard label="Stock Distributed" value={requests.filter((r: any) => r.status === RequestStatus.RECEIVED).length.toString()} icon={<CheckCircle className="text-emerald-500"/>}/>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 bg-white rounded-3xl border shadow-sm overflow-hidden flex flex-col">
+          <div className="px-6 py-5 border-b bg-slate-50/50 flex justify-between items-center">
+            <h2 className="font-bold text-slate-800">
+              {userRole === 'manager' ? 'Awaiting Distribution' : 'Requests for Approval'}
+            </h2>
+            <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{pending.length} New</span>
+          </div>
+          <div className="divide-y overflow-auto max-h-[600px]">
+            {pending.length === 0 ? (
+              <div className="p-20 text-center">
+                <CheckCircle size={48} className="mx-auto text-slate-200 mb-4" />
+                <div className="text-slate-400 font-medium italic">All pending requests cleared from queue.</div>
+              </div>
+            ) : pending.map((r: any) => (
+              <div key={r.id} className="p-8 flex flex-col sm:flex-row justify-between items-center gap-8 group hover:bg-slate-50 transition-colors">
+                <div className="flex gap-5 flex-1">
+                  <div className="h-16 w-16 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 font-black text-xl border border-indigo-100 shadow-sm">{r.requesterName.charAt(0)}</div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-lg mb-0.5">{r.requesterName}</h3>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-3">{new Date(r.createdAt).toLocaleString()}</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {r.items.map((i: any, idx: number) => (
+                        <span key={idx} className="text-[10px] font-black bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-slate-700">
+                          {i.quantity}x {i.type}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-3 shrink-0">
+                  <button onClick={() => onApprove(r.id)} className="px-8 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">Approve</button>
+                  <button onClick={() => onReject(r.id)} className="px-8 py-3 bg-white text-rose-600 border border-rose-100 rounded-xl text-xs font-black hover:bg-rose-50 transition-all active:scale-95">Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* REPLACED GLOBAL ACTIVITY WITH RECENT DEPLOYMENTS REPORT PANEL */}
+        <div className="bg-white rounded-3xl border shadow-sm overflow-hidden flex flex-col">
+          <div className="px-6 py-5 border-b bg-slate-50/50">
+            <h2 className="font-bold text-slate-800">Recent Shop Deployments</h2>
+          </div>
+          <div className="divide-y flex-1 overflow-auto max-h-[600px]">
+            {recentUsages.length === 0 ? (
+              <div className="p-10 text-center text-slate-300 italic text-sm">No recent deployments.</div>
+            ) : recentUsages.map((u: UsageRecord) => (
+              <div key={u.id} className="p-6 hover:bg-slate-50 transition-colors">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-xs font-bold text-slate-900">{u.shopName}</span>
+                  <span className="text-[9px] font-black text-indigo-600 uppercase bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{u.partType}</span>
+                </div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase mb-2">Deployed: {new Date(u.usedAt).toLocaleDateString()}</div>
+                <div className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-100">
+                  <span className="font-black text-[8px] uppercase text-slate-400 block mb-0.5 tracking-tighter">By Staff Member</span>
+                  {u.salespersonName}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SalesDashboard({ requests, onHand, onMarkReceived, onLogUsage }: any) {
+  const approved = requests.filter((r: any) => r.status === RequestStatus.APPROVED);
   const [shop, setShop] = useState('');
   const [part, setPart] = useState<PartType | ''>('');
   const [img, setImg] = useState<string | null>(null);
@@ -456,46 +700,73 @@ function SalesDashboard({ requests, onHand, onMarkReceived, onLogUsage }: { requ
     }
   };
 
-  const handleConfirm = () => {
-    if (shop && part) { onLogUsage(shop, part, img || undefined); setShop(''); setPart(''); setImg(null); }
-  };
-
   return (
-    <div className="space-y-8">
-      <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-        <h2 className="font-bold mb-6 flex items-center gap-2 text-slate-800"><Package className="text-emerald-500"/>Inventory On-Hand</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {onHand.length === 0 ? <div className="col-span-full py-6 text-center text-slate-400 bg-slate-50 border border-dashed rounded-xl">No items in possession.</div> : onHand.map((i: any) => (
-            <div key={i.type} className="p-5 bg-emerald-50 border border-emerald-100 rounded-2xl text-center"><div className="text-3xl font-black text-emerald-700">{i.quantity}</div><div className="text-[10px] font-black text-emerald-600 uppercase">{i.type}</div></div>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-3 bg-emerald-100 rounded-2xl text-emerald-600"><Package size={24} /></div>
+          <h2 className="font-bold text-slate-800 text-xl tracking-tight">Your Current Inventory</h2>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {onHand.length === 0 ? (
+            <div className="col-span-full py-16 text-center text-slate-400 bg-slate-50 border border-dashed rounded-3xl">
+              You currently have zero equipment. Submit a request to get stock.
+            </div>
+          ) : onHand.map((i: any) => (
+            <div key={i.type} className="p-8 bg-emerald-50/50 border border-emerald-100 rounded-[2rem] text-center shadow-sm hover:shadow-md transition-shadow">
+              <div className="text-4xl font-black text-emerald-700 mb-1">{i.quantity}</div>
+              <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{i.type}</div>
+            </div>
           ))}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white rounded-2xl border overflow-hidden">
-          <div className="px-6 py-4 border-b bg-indigo-50/20 font-bold text-indigo-900 flex items-center gap-2"><CheckCircle size={18}/>Pickup Ready</div>
-          <div className="divide-y">
-            {approved.length === 0 ? <div className="p-10 text-center text-slate-400 text-sm italic">Nothing to collect.</div> : approved.map(r => (
-              <div key={r.id} className="p-6 flex justify-between items-center">
-                <div><div className="text-[10px] font-bold text-slate-400 uppercase mb-1">Approved Log</div><div className="text-xs font-bold">{r.items.map(i => `${i.quantity}x ${i.type}`).join(', ')}</div></div>
-                <button onClick={() => onMarkReceived(r.id)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 shadow-md">Mark Collected</button>
+        <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden flex flex-col">
+          <div className="px-8 py-6 border-b bg-indigo-50/20 flex items-center gap-3">
+            <ArrowRightLeft size={20} className="text-indigo-600" />
+            <h2 className="font-bold text-slate-800">Pending Collection</h2>
+          </div>
+          <div className="divide-y overflow-auto max-h-[400px] flex-1">
+            {approved.length === 0 ? (
+              <div className="p-20 text-center text-slate-400 text-sm italic">Nothing awaiting pickup.</div>
+            ) : approved.map((r: any) => (
+              <div key={r.id} className="p-8 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                <div className="flex-1">
+                  <div className="flex gap-1.5 flex-wrap mb-2">
+                    {r.items.map((i: any, idx: number) => <span key={idx} className="text-[10px] font-black px-3 py-1 bg-white border rounded shadow-sm text-slate-600">{i.quantity}x {i.type}</span>)}
+                  </div>
+                  <div className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Ready Since {new Date(r.approvedAt).toLocaleDateString()}</div>
+                </div>
+                <button onClick={() => onMarkReceived(r.id)} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95">Collect Equipment</button>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border overflow-hidden">
-          <div className="px-6 py-4 border-b bg-amber-50/20 font-bold text-amber-900 flex items-center gap-2"><Store size={18}/>Log Shop Visit</div>
-          <div className="p-8 space-y-4">
-            <input value={shop} onChange={e => setShop(e.target.value)} placeholder="Shop Name" className="w-full p-3 border rounded-xl outline-none" />
-            <div className="flex gap-4">
-              <select value={part} onChange={e => setPart(e.target.value as PartType)} className="flex-1 p-3 border rounded-xl outline-none"><option value="">Select Part...</option>{onHand.map((i: any) => <option key={i.type} value={i.type}>{i.type}</option>)}</select>
-              <button onClick={() => fileInput.current?.click()} className={`px-4 py-3 rounded-xl border-2 border-dashed flex items-center gap-2 font-bold text-xs ${img ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'border-slate-300 text-slate-400 hover:border-indigo-500 hover:text-indigo-600'}`}>
-                {img ? <ImageIcon size={18}/> : <Camera size={18}/>}{img ? 'Attached' : 'Add Voucher'}
-              </button>
-              <input type="file" accept="image/*" capture="environment" className="hidden" ref={fileInput} onChange={handleCapture} />
+        <div className="bg-white rounded-[2.5rem] border shadow-sm overflow-hidden">
+          <div className="px-8 py-6 border-b bg-amber-50/20 flex items-center gap-3">
+            <Store size={20} className="text-amber-600" />
+            <h2 className="font-bold text-slate-800">Deployment Entry</h2>
+          </div>
+          <div className="p-10 space-y-6">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Customer / Shop Name</label>
+              <input value={shop} onChange={e => setShop(e.target.value)} placeholder="Where did this go?" className="w-full p-4 border rounded-2xl outline-none focus:border-indigo-500 shadow-sm" />
             </div>
-            <button disabled={!shop || !part} onClick={handleConfirm} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg disabled:opacity-20 active:scale-95 transition-all">Submit Deployment</button>
+            
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Equipment Used</label>
+              <div className="flex gap-4">
+                <select value={part} onChange={e => setPart(e.target.value as PartType)} className="flex-1 p-4 border rounded-2xl outline-none shadow-sm"><option value="">Select Spare...</option>{onHand.map((i: any) => <option key={i.type} value={i.type}>{i.type}</option>)}</select>
+                <button onClick={() => fileInput.current?.click()} className={`px-5 py-4 rounded-2xl border-2 border-dashed flex items-center gap-2 font-black text-xs transition-all ${img ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'border-slate-300 text-slate-400 hover:border-indigo-500 hover:text-indigo-600'}`}>
+                  {img ? <CheckCircle size={20}/> : <Camera size={20}/>}
+                  {img ? 'Attached' : 'Proof'}
+                </button>
+                <input type="file" accept="image/*" capture="environment" className="hidden" ref={fileInput} onChange={handleCapture} />
+              </div>
+            </div>
+            <button disabled={!shop || !part} onClick={() => { onLogUsage(shop, part, img || undefined); setShop(''); setPart(''); setImg(null); }} className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black shadow-xl disabled:opacity-20 active:scale-95 transition-all text-lg">Record Transaction</button>
           </div>
         </div>
       </div>
@@ -503,54 +774,61 @@ function SalesDashboard({ requests, onHand, onMarkReceived, onLogUsage }: { requ
   );
 }
 
-// --- SHARED UI HELPERS ---
-
 function NavItem({ icon, label, active, onClick }: { icon: any, label: string, active: boolean, onClick: any }) {
-  return <button onClick={onClick} className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-100'}`}>{icon}<span className="font-semibold text-sm">{label}</span></button>;
+  return <button onClick={onClick} className={`flex items-center gap-3 px-3 py-3 rounded-2xl transition-all ${active ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-600 hover:bg-slate-100'}`}>{icon}<span className="font-bold text-sm tracking-tight">{label}</span></button>;
 }
 
 function StatCard({ label, value, icon }: { label: string, value: string, icon: any }) {
-  return <div className="bg-white p-6 rounded-2xl border shadow-sm flex items-center gap-5 hover:-translate-y-1 transition-all"><div className="p-4 bg-slate-50 rounded-2xl border">{icon}</div><div><div className="text-xs font-black text-slate-400 uppercase mb-1">{label}</div><div className="text-2xl font-black text-slate-900">{value}</div></div></div>;
-}
-
-function StatusBadge({ status }: { status: RequestStatus }) {
-  const styles = { [RequestStatus.PENDING]: 'bg-amber-100 text-amber-700 border-amber-200', [RequestStatus.APPROVED]: 'bg-emerald-100 text-emerald-700 border-emerald-200', [RequestStatus.REJECTED]: 'bg-rose-100 text-rose-700 border-rose-200', [RequestStatus.RECEIVED]: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
-  return <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border tracking-widest ${styles[status]}`}>{status}</span>;
-}
-
-function AdminDashboard({ requests, usages, onApprove, onReject }: any) {
-  const pending = requests.filter((r: any) => r.status === RequestStatus.PENDING);
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><StatCard label="Pending Approval" value={pending.length.toString()} icon={<ClipboardList className="text-amber-500"/>}/><StatCard label="Total Disbursed" value={requests.filter((r: any) => r.status === RequestStatus.RECEIVED).length.toString()} icon={<CheckCircle className="text-emerald-500"/>}/><StatCard label="Live Shop Visits" value={usages.length.toString()} icon={<Store className="text-indigo-500"/>}/></div>
-      <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-        <div className="px-6 py-5 border-b bg-slate-50/50 flex justify-between items-center"><h2 className="font-bold text-slate-800">Pending Requests</h2><span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold">{pending.length} Waiting</span></div>
-        <div className="divide-y">
-          {pending.length === 0 ? <div className="p-16 text-center text-slate-400 font-medium italic">No pending requests.</div> : pending.map((r: any) => (
-            <div key={r.id} className="p-6 flex flex-col sm:flex-row justify-between items-center gap-6">
-              <div className="flex gap-4"><div className="h-12 w-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold border border-indigo-100">{r.requesterName.charAt(0)}</div><div><h3 className="font-bold text-slate-900">{r.requesterName}</h3><p className="text-xs text-slate-500 mb-2">{new Date(r.createdAt).toLocaleString()}</p><div className="flex gap-2">{r.items.map((i: any, idx: number) => <span key={idx} className="text-[10px] font-bold bg-slate-100 px-2 py-0.5 rounded border">{i.quantity}x {i.type}</span>)}</div></div></div>
-              <div className="flex gap-2"><button onClick={() => onApprove(r.id)} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-indigo-700">Approve</button><button onClick={() => onReject(r.id)} className="px-5 py-2.5 bg-white text-rose-600 border border-rose-100 rounded-xl text-sm font-bold hover:bg-rose-50">Reject</button></div>
-            </div>
-          ))}
-        </div>
+    <div className="bg-white p-8 rounded-3xl border shadow-sm flex items-center gap-6 hover:-translate-y-1 transition-all group">
+      <div className="p-5 bg-slate-50 rounded-2xl border group-hover:scale-110 transition-transform">{icon}</div>
+      <div>
+        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</div>
+        <div className="text-3xl font-black text-slate-900 leading-none">{value}</div>
       </div>
     </div>
   );
+}
+
+function StatusBadge({ status }: { status: RequestStatus }) {
+  const styles = { 
+    [RequestStatus.PENDING]: 'bg-amber-100 text-amber-700 border-amber-200', 
+    [RequestStatus.APPROVED]: 'bg-emerald-100 text-emerald-700 border-emerald-200', 
+    [RequestStatus.REJECTED]: 'bg-rose-100 text-rose-700 border-rose-200', 
+    [RequestStatus.RECEIVED]: 'bg-indigo-100 text-indigo-700 border-indigo-200' 
+  };
+  return <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border tracking-widest shadow-sm ${styles[status]}`}>{status}</span>;
 }
 
 function RequestForm({ onSubmit, onCancel }: any) {
   const [qtys, setQtys] = useState<{ [key in PartType]: number }>({ 'Remax Charger': 0, 'Charging Cable': 0, 'Micro Cable': 0, 'Battery': 0 });
   const has = Object.values(qtys).some(q => q > 0);
   return (
-    <div className="bg-white rounded-3xl border shadow-2xl p-10 max-w-2xl mx-auto mt-10">
-      <h2 className="text-2xl font-black mb-8">Stock Request Form</h2>
-      <div className="space-y-4 mb-10">{SPARE_PARTS.map(p => (
-        <div key={p} className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border group hover:bg-indigo-50/30 transition-colors">
-          <div><div className="font-bold">{p}</div><div className="text-[10px] font-bold uppercase text-slate-400">Warehouse Stock</div></div>
-          <div className="flex items-center gap-4"><button onClick={() => setQtys({...qtys, [p]: Math.max(0, qtys[p]-1)})} className="h-10 w-10 bg-white border rounded-xl flex items-center justify-center font-bold shadow-sm">-</button><span className="w-6 text-center font-black text-xl">{qtys[p]}</span><button onClick={() => setQtys({...qtys, [p]: qtys[p]+1})} className="h-10 w-10 bg-white border rounded-xl flex items-center justify-center font-bold shadow-sm text-indigo-600">+</button></div>
-        </div>
-      ))}</div>
-      <div className="flex gap-4"><button onClick={() => onSubmit(Object.entries(qtys).map(([type, quantity]) => ({ type, quantity })))} disabled={!has} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl disabled:opacity-20 active:scale-95 transition-all">Submit Request</button><button onClick={onCancel} className="px-8 py-4 text-slate-500 font-bold hover:bg-slate-100 rounded-2xl">Cancel</button></div>
+    <div className="bg-white rounded-[3rem] border shadow-2xl p-12 max-w-2xl mx-auto mt-10 animate-in zoom-in-95 duration-300">
+      <div className="h-20 w-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-600 mx-auto mb-8"><ClipboardList size={40}/></div>
+      <h2 className="text-4xl font-black mb-2 text-center text-slate-900">Requisition</h2>
+      <p className="text-center text-slate-400 text-sm font-medium mb-10">Select equipment and quantities for replenishment.</p>
+      
+      <div className="space-y-4 mb-10">
+        {SPARE_PARTS.map(p => (
+          <div key={p} className="flex items-center justify-between p-6 bg-slate-50/50 rounded-3xl border border-slate-100 group hover:bg-white hover:border-indigo-100 hover:shadow-md transition-all">
+            <div>
+              <div className="font-bold text-slate-800 text-lg leading-tight">{p}</div>
+              <div className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Inventory Supply</div>
+            </div>
+            <div className="flex items-center gap-6">
+              <button onClick={() => setQtys({...qtys, [p]: Math.max(0, qtys[p]-1)})} className="h-12 w-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center font-black shadow-sm text-slate-400 hover:text-rose-500 hover:border-rose-100 transition-all">-</button>
+              <span className="w-6 text-center font-black text-2xl text-slate-900">{qtys[p]}</span>
+              <button onClick={() => setQtys({...qtys, [p]: qtys[p]+1})} className="h-12 w-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center font-black shadow-sm text-indigo-600 hover:border-indigo-100 transition-all">+</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      <div className="flex flex-col gap-4">
+        <button onClick={() => onSubmit(Object.entries(qtys).map(([type, quantity]) => ({ type, quantity })))} disabled={!has} className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black shadow-xl shadow-indigo-100 disabled:opacity-20 transition-all active:scale-95 text-xl">Confirm Requisition</button>
+        <button onClick={onCancel} className="w-full py-4 text-slate-400 font-bold hover:bg-slate-50 rounded-[1.5rem] transition-all">Cancel Form</button>
+      </div>
     </div>
   );
 }
@@ -558,16 +836,43 @@ function RequestForm({ onSubmit, onCancel }: any) {
 function ActivityLog({ requests, usages, userRole }: any) {
   const [t, setT] = useState<'r' | 'u'>('r');
   return (
-    <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-      <div className="flex border-b"><button onClick={() => setT('r')} className={`flex-1 py-5 text-xs font-black uppercase tracking-widest ${t === 'r' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/10' : 'text-slate-400 hover:bg-slate-50'}`}>Requests</button><button onClick={() => setT('u')} className={`flex-1 py-5 text-xs font-black uppercase tracking-widest ${t === 'u' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/10' : 'text-slate-400 hover:bg-slate-50'}`}>Usages</button></div>
-      <div className="p-8 space-y-4">
-        {t === 'r' ? (requests.length === 0 ? <div className="p-20 text-center text-slate-300 italic">No request history.</div> : requests.map((r: any) => (
-          <div key={r.id} className="p-5 bg-slate-50/50 rounded-2xl border flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div><div className="font-bold text-sm mb-1">{r.requesterName}</div><div className="text-[10px] text-slate-400 font-bold mb-2">{new Date(r.createdAt).toLocaleString()}</div><div className="flex gap-1.5 flex-wrap">{r.items.map((i: any, idx: number) => <span key={idx} className="text-[10px] font-black px-2 py-0.5 bg-white border rounded-lg text-slate-600">{i.quantity}x {i.type}</span>)}</div></div><StatusBadge status={r.status} />
+    <div className="bg-white rounded-[2rem] border shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+      <div className="flex border-b bg-slate-50/50">
+        <button onClick={() => setT('r')} className={`flex-1 py-6 text-[10px] font-black uppercase tracking-widest transition-all ${t === 'r' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-400 hover:bg-white/50'}`}>Requisitions</button>
+        <button onClick={() => setT('u')} className={`flex-1 py-6 text-[10px] font-black uppercase tracking-widest transition-all ${t === 'u' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-400 hover:bg-white/50'}`}>Shop Deployments</button>
+      </div>
+      <div className="p-10 space-y-5">
+        {t === 'r' ? (requests.length === 0 ? <div className="p-20 text-center text-slate-300 italic">No records in system.</div> : requests.map((r: any) => (
+          <div key={r.id} className="p-6 bg-white border border-slate-100 rounded-3xl flex flex-col sm:flex-row justify-between items-center gap-6 shadow-sm group hover:shadow-md transition-shadow">
+            <div>
+              <div className="font-bold text-base text-slate-800 mb-1">{r.requesterName}</div>
+              <div className="text-[10px] text-slate-400 font-black mb-3 uppercase tracking-widest">{new Date(r.createdAt).toLocaleString()}</div>
+              <div className="flex gap-2 flex-wrap">
+                {r.items.map((i: any, idx: number) => <span key={idx} className="text-[10px] font-black px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-600">{i.quantity}x {i.type}</span>)}
+              </div>
+            </div>
+            <StatusBadge status={r.status} />
           </div>
-        ))) : (usages.length === 0 ? <div className="p-20 text-center text-slate-300 italic">No shop deployments reported.</div> : usages.map((u: any) => (
-          <div key={u.id} className="p-5 bg-slate-50/50 rounded-2xl border flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex gap-4 items-center">{u.voucherImage && <div className="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 cursor-pointer" onClick={() => window.open(u.voucherImage)}><img src={u.voucherImage} className="w-full h-full object-cover"/></div>}<div><div className="font-bold text-sm mb-1">{u.shopName}</div><div className="text-[10px] text-slate-400 font-bold mb-1">{new Date(u.usedAt).toLocaleString()}</div><div className="text-xs font-black text-indigo-600 uppercase">{u.partType}</div></div></div><div className="text-right"><div className="text-[10px] text-slate-400 font-bold uppercase mb-1">Sales Rep</div><div className="text-xs font-bold text-slate-700 bg-white border px-3 py-1 rounded-full">{u.salespersonName}</div></div>
+        ))) : (usages.length === 0 ? <div className="p-20 text-center text-slate-300 italic">No deployments reported.</div> : usages.map((u: any) => (
+          <div key={u.id} className="p-6 bg-white border border-slate-100 rounded-3xl flex flex-col sm:flex-row justify-between items-center gap-6 shadow-sm group hover:shadow-md transition-shadow">
+            <div className="flex gap-5 items-center">
+              {u.voucherImage ? (
+                <div className="h-16 w-16 rounded-2xl overflow-hidden border border-slate-100 cursor-pointer shadow-inner" onClick={() => window.open(u.voucherImage)}>
+                  <img src={u.voucherImage} className="w-full h-full object-cover"/>
+                </div>
+              ) : (
+                <div className="h-16 w-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 border border-slate-100"><ImageIcon size={24}/></div>
+              )}
+              <div>
+                <div className="font-bold text-base text-slate-800 mb-0.5">{u.shopName}</div>
+                <div className="text-[10px] text-slate-400 font-black mb-1.5 uppercase tracking-widest">{new Date(u.usedAt).toLocaleString()}</div>
+                <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded inline-block">{u.partType}</div>
+              </div>
+            </div>
+            <div className="text-right flex flex-col items-end">
+              <div className="text-[9px] text-slate-400 font-black uppercase mb-1.5 tracking-tighter">Processed By</div>
+              <div className="text-xs font-bold text-slate-700 bg-slate-50 border px-4 py-1.5 rounded-full">{u.salespersonName}</div>
+            </div>
           </div>
         )))}
       </div>
@@ -578,12 +883,33 @@ function ActivityLog({ requests, usages, userRole }: any) {
 function InsightsView({ usages, requests, isAnalyzing, setIsAnalyzing, aiInsights, setAiInsights }: any) {
   const handleAnalyze = async () => { setIsAnalyzing(true); setAiInsights(await analyzeUsage(usages, requests)); setIsAnalyzing(false); };
   return (
-    <div className="bg-white rounded-3xl border p-10 shadow-sm space-y-6">
-      <div className="flex items-center gap-3"><Sparkles className="text-indigo-600"/><h2 className="text-xl font-bold">Inventory Intelligence</h2></div>
-      <p className="text-slate-600 leading-relaxed">Let AI analyze cross-shop consumption patterns and suggest restock levels.</p>
-      {!aiInsights && !isAnalyzing && <button onClick={handleAnalyze} className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2 active:scale-95">Generate Report</button>}
-      {isAnalyzing && <div className="flex items-center gap-3 text-indigo-600 animate-pulse font-black"><Loader2 className="animate-spin"/>Reading shop history...</div>}
-      {aiInsights && <div className="prose prose-indigo max-w-none bg-slate-50 p-8 rounded-3xl border whitespace-pre-wrap font-medium text-slate-800 leading-relaxed shadow-inner">{aiInsights}</div>}
+    <div className="bg-white rounded-[3rem] border p-16 shadow-sm space-y-8 animate-in fade-in duration-500">
+      <div className="flex items-center gap-5 mb-4">
+        <div className="p-4 bg-indigo-600 rounded-[1.5rem] text-white shadow-2xl shadow-indigo-200"><Sparkles size={32}/></div>
+        <h2 className="text-3xl font-black text-slate-900 tracking-tight">AI Inventory Audit</h2>
+      </div>
+      <p className="text-slate-500 text-lg leading-relaxed font-medium">Gemini AI parses your shop history and requisition logs to optimize stock distribution and identify high-consumption nodes.</p>
+      
+      {!aiInsights && !isAnalyzing && (
+        <button onClick={handleAnalyze} className="bg-indigo-600 text-white px-12 py-6 rounded-[1.5rem] font-black shadow-2xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all flex items-center gap-3 active:scale-95 group text-lg">
+          Generate Full Database Audit
+          <ChevronRight className="group-hover:translate-x-1 transition-transform" size={24}/>
+        </button>
+      )}
+      
+      {isAnalyzing && (
+        <div className="flex flex-col items-center py-16 text-indigo-600 animate-pulse font-black gap-6">
+          <Loader2 className="animate-spin" size={64}/>
+          <div className="tracking-widest uppercase text-xs font-black">Reading consumption patterns...</div>
+        </div>
+      )}
+      
+      {aiInsights && (
+        <div className="prose prose-indigo max-w-none bg-slate-50 p-12 rounded-[2.5rem] border border-slate-100 whitespace-pre-wrap font-medium text-slate-800 leading-relaxed shadow-inner animate-in slide-in-from-bottom-4 duration-500 relative">
+          <button onClick={() => setAiInsights(null)} className="absolute top-8 right-8 p-3 bg-white border rounded-full text-slate-400 hover:text-rose-500 transition-colors shadow-sm"><X size={20}/></button>
+          {aiInsights}
+        </div>
+      )}
     </div>
   );
 }

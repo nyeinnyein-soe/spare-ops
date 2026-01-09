@@ -16,7 +16,7 @@ export interface SpareItem {
 export interface User {
   id: string;
   name: string;
-  role: 'admin' | 'sales';
+  role: 'admin' | 'manager' | 'sales';
   avatarColor: string;
   password: string;
 }
