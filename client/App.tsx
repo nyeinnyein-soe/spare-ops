@@ -49,7 +49,6 @@ import { api } from "./services/api";
 
 export default function App() {
   const [users, setUsers] = useState<User[]>([]);
-  // Initialize from LocalStorage immediately to prevent "flicker" of login screen
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem("spareops_user");
     return saved ? JSON.parse(saved) : null;
@@ -62,29 +61,27 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // --- DATA SYNC ---
-  // Inside App() component...
+  const [viewImage, setViewImage] = useState<string | null>(null);
 
   const syncData = async (isBackground = false) => {
-    // If we aren't logged in, don't fetch data
     if (!localStorage.getItem("spareops_token")) return;
 
-    // Only show spinner if this is NOT a background refresh
     if (!isBackground) setLoading(true);
-
     try {
       const [u, r, usg] = await Promise.all([
         db.users.select(),
         db.requests.select(),
         db.usages.select(),
       ]);
-
       setUsers(u || []);
       setRequests(r || []);
       setUsages(usg || []);
     } catch (err) {
       console.error("Sync error:", err);
-      if ((err as Error).message.includes("401")) {
+      if (
+        (err as Error).message.includes("401") ||
+        (err as Error).message.includes("403")
+      ) {
         handleLogout();
       }
     } finally {
@@ -94,26 +91,15 @@ export default function App() {
 
   useEffect(() => {
     if (currentUser) {
-      // 1. Initial load (with spinner)
       syncData(false);
-
-      // 2. Set up interval for background updates (no spinner)
-      const intervalId = setInterval(() => {
-        syncData(true);
-      }, 2500); // Fetch every 5 seconds
-
-      // 3. Cleanup on unmount/logout
+      const intervalId = setInterval(() => syncData(true), 2000);
       return () => clearInterval(intervalId);
     }
-  }, [currentUser]); // Re-run if user logs in/out
+  }, [currentUser]);
 
-  // --- AUTH HANDLERS ---
   const handleLoginSuccess = async (user: User, token: string) => {
-    // 1. Save Token
     localStorage.setItem("spareops_token", token);
-    // 2. Save User Object (since we don't have /me endpoint yet)
     localStorage.setItem("spareops_user", JSON.stringify(user));
-
     setCurrentUser(user);
     await syncData();
   };
@@ -127,8 +113,6 @@ export default function App() {
     setView("dashboard");
   };
 
-  // --- ENTITY HANDLERS (API CALLS) ---
-
   const handleCreateUser = async (
     name: string,
     role: any,
@@ -141,7 +125,6 @@ export default function App() {
       setUsers(await db.users.select());
     } catch (e) {
       alert("Failed to create user");
-      console.error(e);
     }
   };
 
@@ -149,8 +132,6 @@ export default function App() {
     try {
       await db.users.update(updatedUser);
       setUsers(await db.users.select());
-
-      // If updating self (e.g. name change), update session storage too
       if (currentUser?.id === updatedUser.id) {
         const newSession = { ...currentUser, ...updatedUser };
         setCurrentUser(newSession);
@@ -178,7 +159,6 @@ export default function App() {
   ) => {
     if (!currentUser) return;
     try {
-      // dbService now calls API: POST /requests
       await db.requests.insert(
         currentUser.id,
         items.filter((i) => i.quantity > 0),
@@ -192,7 +172,6 @@ export default function App() {
 
   const handleUpdateStatus = async (id: string, status: RequestStatus) => {
     try {
-      // dbService now calls API: PATCH /requests/:id/status
       await db.requests.updateStatus(id, status);
       setRequests(await db.requests.select());
     } catch (e) {
@@ -207,7 +186,6 @@ export default function App() {
   ) => {
     if (!currentUser) return;
     try {
-      // dbService now calls API: POST /usages
       await db.usages.insert({
         shopName,
         partType,
@@ -222,22 +200,11 @@ export default function App() {
 
   const handleRunAi = async () => {
     setIsAnalyzing(true);
-    try {
-      // Assuming you might add this later. For now, we mock it or
-      // you can implement the /ai/analyze endpoint on backend.
-      setTimeout(() => {
-        setAiInsights(
-          "AI Analysis requires backend integration. Please implement POST /api/v1/ai/analyze.",
-        );
-        setIsAnalyzing(false);
-      }, 2000);
-    } catch (error) {
-      console.error(error);
+    setTimeout(() => {
+      setAiInsights("AI Analysis requires backend integration.");
       setIsAnalyzing(false);
-    }
+    }, 2000);
   };
-
-  // --- FRONTEND CALCULATIONS ---
 
   const onHandInventory = useMemo(() => {
     if (!currentUser || currentUser.role !== "sales") return [];
@@ -261,11 +228,8 @@ export default function App() {
       .map(([t, q]) => ({ type: t as PartType, quantity: q || 0 }));
   }, [requests, usages, currentUser]);
 
-  // --- VIEWS ---
-
   if (!currentUser) return <Login onLogin={handleLoginSuccess} />;
 
-  // Show loader only if we have a user but no data yet
   if (loading && requests.length === 0 && users.length === 0)
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -275,6 +239,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
+      {/* --- IMAGE VIEWER MODAL --- */}
+      {viewImage && (
+        <ImageViewer src={viewImage} onClose={() => setViewImage(null)} />
+      )}
+
       <nav className="w-full md:w-64 bg-white border-r border-slate-200 p-4 flex flex-col gap-2 shadow-sm shrink-0 z-30">
         <div className="flex items-center gap-2 px-2 py-4 mb-4 border-b">
           <div className="bg-indigo-600 p-2 rounded-lg text-white shadow-lg shadow-indigo-200">
@@ -291,7 +260,6 @@ export default function App() {
           active={view === "dashboard"}
           onClick={() => setView("dashboard")}
         />
-
         {currentUser.role === "sales" && (
           <NavItem
             icon={<PlusCircle size={20} />}
@@ -300,14 +268,12 @@ export default function App() {
             onClick={() => setView("form")}
           />
         )}
-
         <NavItem
           icon={<History size={20} />}
           label="Activity Log"
           active={view === "history"}
           onClick={() => setView("history")}
         />
-
         {(currentUser.role === "admin" || currentUser.role === "manager") && (
           <>
             <NavItem
@@ -324,7 +290,6 @@ export default function App() {
             />
           </>
         )}
-
         {currentUser.role === "admin" && (
           <NavItem
             icon={<Sparkles size={20} />}
@@ -354,8 +319,7 @@ export default function App() {
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-lg font-semibold text-sm transition-all"
           >
-            <LogOut size={18} />
-            Logout
+            <LogOut size={18} /> Logout
           </button>
         </div>
       </nav>
@@ -428,6 +392,7 @@ export default function App() {
                   : usages.filter((u) => u.salespersonId === currentUser.id)
               }
               userRole={currentUser.role}
+              onViewImage={(src: string) => setViewImage(src)} // Pass handler here
             />
           )}
           {view === "users" && (
@@ -443,7 +408,7 @@ export default function App() {
             <ReportsManager
               requests={requests}
               usages={usages}
-              refresh={syncData}
+              refresh={() => syncData(false)}
               userRole={currentUser.role}
             />
           )}
@@ -463,7 +428,136 @@ export default function App() {
   );
 }
 
-// --- SUB COMPONENTS ---
+// Image Viewer Modal
+function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
+  if (!src) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-6 right-6 p-3 bg-white/10 text-white rounded-full hover:bg-white/20 transition-all backdrop-blur-sm"
+      >
+        <X size={32} />
+      </button>
+      <img
+        src={src}
+        className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+        alt="Full size view"
+      />
+    </div>
+  );
+}
+
+function ActivityLog({ requests, usages, userRole, onViewImage }: any) {
+  const [t, setT] = useState<"r" | "u">("r");
+  return (
+    <div className="bg-white rounded-[2rem] border shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+      <div className="flex border-b bg-slate-50/50">
+        <button
+          onClick={() => setT("r")}
+          className={`flex-1 py-6 text-[10px] font-black uppercase tracking-widest transition-all ${t === "r" ? "text-indigo-600 border-b-2 border-indigo-600 bg-white" : "text-slate-400 hover:bg-white/50"}`}
+        >
+          Requisitions
+        </button>
+        <button
+          onClick={() => setT("u")}
+          className={`flex-1 py-6 text-[10px] font-black uppercase tracking-widest transition-all ${t === "u" ? "text-indigo-600 border-b-2 border-indigo-600 bg-white" : "text-slate-400 hover:bg-white/50"}`}
+        >
+          Shop Deployments
+        </button>
+      </div>
+      <div className="p-10 space-y-5">
+        {t === "r" ? (
+          requests.length === 0 ? (
+            <div className="p-20 text-center text-slate-300 italic">
+              No records in system.
+            </div>
+          ) : (
+            requests.map((r: any) => (
+              <div
+                key={r.id}
+                className="p-6 bg-white border border-slate-100 rounded-3xl flex flex-col sm:flex-row justify-between items-center gap-6 shadow-sm group hover:shadow-md transition-shadow"
+              >
+                <div>
+                  <div className="font-bold text-base text-slate-800 mb-1">
+                    {r.requesterName}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-black mb-3 uppercase tracking-widest">
+                    {new Date(r.createdAt).toLocaleString()}
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    {r.items.map((i: any, idx: number) => (
+                      <span
+                        key={idx}
+                        className="text-[10px] font-black px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-600"
+                      >
+                        {i.quantity}x {i.type}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <StatusBadge status={r.status} />
+              </div>
+            ))
+          )
+        ) : usages.length === 0 ? (
+          <div className="p-20 text-center text-slate-300 italic">
+            No deployments reported.
+          </div>
+        ) : (
+          usages.map((u: any) => (
+            <div
+              key={u.id}
+              className="p-6 bg-white border border-slate-100 rounded-3xl flex flex-col sm:flex-row justify-between items-center gap-6 shadow-sm group hover:shadow-md transition-shadow"
+            >
+              <div className="flex gap-5 items-center">
+                {u.voucherImage ? (
+                  <div
+                    className="h-16 w-16 rounded-2xl overflow-hidden border border-slate-100 cursor-pointer shadow-inner hover:scale-105 transition-transform"
+                    onClick={() => onViewImage && onViewImage(u.voucherImage)}
+                  >
+                    <img
+                      src={u.voucherImage}
+                      className="w-full h-full object-cover"
+                      alt="Voucher"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-16 w-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 border border-slate-100">
+                    <ImageIcon size={24} />
+                  </div>
+                )}
+                <div>
+                  <div className="font-bold text-base text-slate-800 mb-0.5">
+                    {u.shopName}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-black mb-1.5 uppercase tracking-widest">
+                    {new Date(u.usedAt).toLocaleString()}
+                  </div>
+                  <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded inline-block">
+                    {u.partType}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right flex flex-col items-end">
+                <div className="text-[9px] text-slate-400 font-black uppercase mb-1.5 tracking-tighter">
+                  Processed By
+                </div>
+                <div className="text-xs font-bold text-slate-700 bg-slate-50 border px-4 py-1.5 rounded-full">
+                  {u.salespersonName}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 
 function Login({ onLogin }: { onLogin: (user: User, token: string) => void }) {
   const [username, setUsername] = useState("");
@@ -479,7 +573,6 @@ function Login({ onLogin }: { onLogin: (user: User, token: string) => void }) {
 
     try {
       const data = await api.post("/auth/login", { name: username, password });
-      // Expecting { user: {...}, token: "..." }
       onLogin(data.user, data.token);
     } catch (err) {
       console.error(err);
@@ -936,7 +1029,6 @@ function UserManagement({
                   setFormData({ ...formData, password: e.target.value })
                 }
                 className="w-full p-4 border rounded-xl outline-none focus:border-indigo-500 shadow-sm"
-                // Password required only for new users
                 required={!editingUser}
               />
             </div>
@@ -1181,7 +1273,6 @@ function SalesDashboard({ requests, onHand, onMarkReceived, onLogUsage }: any) {
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Limit file size check could go here
       const reader = new FileReader();
       reader.onloadend = () => setImg(reader.result as string);
       reader.readAsDataURL(file);
@@ -1480,113 +1571,6 @@ function RequestForm({ onSubmit, onCancel }: any) {
         >
           Cancel Form
         </button>
-      </div>
-    </div>
-  );
-}
-
-function ActivityLog({ requests, usages, userRole }: any) {
-  const [t, setT] = useState<"r" | "u">("r");
-  return (
-    <div className="bg-white rounded-[2rem] border shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
-      <div className="flex border-b bg-slate-50/50">
-        <button
-          onClick={() => setT("r")}
-          className={`flex-1 py-6 text-[10px] font-black uppercase tracking-widest transition-all ${t === "r" ? "text-indigo-600 border-b-2 border-indigo-600 bg-white" : "text-slate-400 hover:bg-white/50"}`}
-        >
-          Requisitions
-        </button>
-        <button
-          onClick={() => setT("u")}
-          className={`flex-1 py-6 text-[10px] font-black uppercase tracking-widest transition-all ${t === "u" ? "text-indigo-600 border-b-2 border-indigo-600 bg-white" : "text-slate-400 hover:bg-white/50"}`}
-        >
-          Shop Deployments
-        </button>
-      </div>
-      <div className="p-10 space-y-5">
-        {t === "r" ? (
-          requests.length === 0 ? (
-            <div className="p-20 text-center text-slate-300 italic">
-              No records in system.
-            </div>
-          ) : (
-            requests.map((r: any) => (
-              <div
-                key={r.id}
-                className="p-6 bg-white border border-slate-100 rounded-3xl flex flex-col sm:flex-row justify-between items-center gap-6 shadow-sm group hover:shadow-md transition-shadow"
-              >
-                <div>
-                  <div className="font-bold text-base text-slate-800 mb-1">
-                    {r.requesterName}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-black mb-3 uppercase tracking-widest">
-                    {new Date(r.createdAt).toLocaleString()}
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    {r.items.map((i: any, idx: number) => (
-                      <span
-                        key={idx}
-                        className="text-[10px] font-black px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-600"
-                      >
-                        {i.quantity}x {i.type}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <StatusBadge status={r.status} />
-              </div>
-            ))
-          )
-        ) : usages.length === 0 ? (
-          <div className="p-20 text-center text-slate-300 italic">
-            No deployments reported.
-          </div>
-        ) : (
-          usages.map((u: any) => (
-            <div
-              key={u.id}
-              className="p-6 bg-white border border-slate-100 rounded-3xl flex flex-col sm:flex-row justify-between items-center gap-6 shadow-sm group hover:shadow-md transition-shadow"
-            >
-              <div className="flex gap-5 items-center">
-                {u.voucherImage ? (
-                  <div
-                    className="h-16 w-16 rounded-2xl overflow-hidden border border-slate-100 cursor-pointer shadow-inner"
-                    onClick={() => window.open(u.voucherImage)}
-                  >
-                    <img
-                      src={u.voucherImage}
-                      className="w-full h-full object-cover"
-                      alt="Voucher"
-                    />
-                  </div>
-                ) : (
-                  <div className="h-16 w-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 border border-slate-100">
-                    <ImageIcon size={24} />
-                  </div>
-                )}
-                <div>
-                  <div className="font-bold text-base text-slate-800 mb-0.5">
-                    {u.shopName}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-black mb-1.5 uppercase tracking-widest">
-                    {new Date(u.usedAt).toLocaleString()}
-                  </div>
-                  <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded inline-block">
-                    {u.partType}
-                  </div>
-                </div>
-              </div>
-              <div className="text-right flex flex-col items-end">
-                <div className="text-[9px] text-slate-400 font-black uppercase mb-1.5 tracking-tighter">
-                  Processed By
-                </div>
-                <div className="text-xs font-bold text-slate-700 bg-slate-50 border px-4 py-1.5 rounded-full">
-                  {u.salespersonName}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
       </div>
     </div>
   );
