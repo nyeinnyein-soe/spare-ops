@@ -33,6 +33,8 @@ import {
   RotateCcw,
   Calendar,
   ShieldAlert,
+  Bell,
+  Info, // Added Info icon for toaster
 } from "lucide-react";
 import {
   PartType,
@@ -43,11 +45,13 @@ import {
   User,
   AVATAR_COLORS,
   AppView,
+  NotificationItem,
 } from "./types";
 import { db } from "./services/dbService";
 import { api } from "./services/api";
 
 export default function App() {
+  // --- STATE ---
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem("spareops_user");
@@ -56,26 +60,67 @@ export default function App() {
 
   const [requests, setRequests] = useState<RequestRecord[]>([]);
   const [usages, setUsages] = useState<UsageRecord[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [view, setView] = useState<AppView>("dashboard");
+
+  // UI State
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loading, setLoading] = useState(false);
-
   const [viewImage, setViewImage] = useState<string | null>(null);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
 
+  // TOASTER STATE
+  const [toast, setToast] = useState<{ msg: string; show: boolean }>({
+    msg: "",
+    show: false,
+  });
+  const notifRef = useRef<HTMLDivElement>(null); // Ref for click-away
+
+  // --- CLICK AWAY LISTENER ---
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        notifRef.current &&
+        !notifRef.current.contains(event.target as Node)
+      ) {
+        setShowNotifDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [notifRef]);
+
+  // --- DATA SYNC (POLLING) ---
   const syncData = async (isBackground = false) => {
     if (!localStorage.getItem("spareops_token")) return;
 
     if (!isBackground) setLoading(true);
     try {
-      const [u, r, usg] = await Promise.all([
+      const [u, r, usg, n] = await Promise.all([
         db.users.select(),
         db.requests.select(),
         db.usages.select(),
+        db.notifications.select(),
       ]);
       setUsers(u || []);
       setRequests(r || []);
       setUsages(usg || []);
+
+      // --- TOASTER LOGIC ---
+      if (isBackground) {
+        // Calculate unread counts
+        const oldUnread = notifications.filter((x) => !x.isRead).length;
+        const newUnread = (n || []).filter((x) => !x.isRead).length;
+
+        // If unread count INCREASED, it means a new notification arrived
+        if (newUnread > oldUnread) {
+          const latest = (n || [])[0]; // Assuming backend returns sorted by desc
+          showToast(`New Alert: ${latest?.title || "Update received"}`);
+        }
+      }
+
+      setNotifications(n || []);
     } catch (err) {
       console.error("Sync error:", err);
       if (
@@ -89,19 +134,26 @@ export default function App() {
     }
   };
 
+  const showToast = (msg: string) => {
+    setToast({ msg, show: true });
+    // Auto hide after 3 seconds
+    setTimeout(() => setToast({ msg: "", show: false }), 3000);
+  };
+
+  // Setup Polling Loop
   useEffect(() => {
     if (currentUser) {
       syncData(false);
-      const intervalId = setInterval(() => syncData(true), 2000);
+      const intervalId = setInterval(() => syncData(true), 5000);
       return () => clearInterval(intervalId);
     }
   }, [currentUser]);
 
+  // --- HANDLERS ---
   const handleLoginSuccess = async (user: User, token: string) => {
     localStorage.setItem("spareops_token", token);
     localStorage.setItem("spareops_user", JSON.stringify(user));
     setCurrentUser(user);
-    await syncData();
   };
 
   const handleLogout = () => {
@@ -110,8 +162,23 @@ export default function App() {
     setCurrentUser(null);
     setRequests([]);
     setUsages([]);
+    setNotifications([]);
     setView("dashboard");
   };
+
+  const handleMarkRead = async (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+    );
+    await db.notifications.markRead(id);
+  };
+
+  const handleClearAllNotifications = async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    await db.notifications.clearAll();
+  };
+
+  // ... (Other handlers like handleCreateUser, handleLogUsage remain exactly the same) ...
 
   const handleCreateUser = async (
     name: string,
@@ -144,7 +211,7 @@ export default function App() {
 
   const handleDeleteUser = async (id: string) => {
     if (currentUser?.id === id) return alert("Cannot delete self.");
-    if (confirm("Permanently delete this user from database?")) {
+    if (confirm("Permanently delete this user?")) {
       try {
         await db.users.delete(id);
         setUsers(await db.users.select());
@@ -238,8 +305,11 @@ export default function App() {
     );
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-50">
-      {/* --- IMAGE VIEWER MODAL --- */}
+    <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 relative">
+      {/* TOASTER NOTIFICATION */}
+      <Toast message={toast.msg} show={toast.show} />
+
+      {/* IMAGE VIEWER */}
       {viewImage && (
         <ImageViewer src={viewImage} onClose={() => setViewImage(null)} />
       )}
@@ -333,20 +403,87 @@ export default function App() {
                 ? "Audit & Reports"
                 : view}
           </h1>
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-slate-200 shadow-sm">
-            {currentUser.role === "admin" ? (
-              <ShieldCheck size={16} className="text-indigo-600" />
-            ) : currentUser.role === "manager" ? (
-              <ShieldAlert size={16} className="text-amber-600" />
-            ) : (
-              <UserIcon size={16} className="text-emerald-600" />
-            )}
-            <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">
-              {currentUser.role} Session
-            </span>
+
+          <div className="flex items-center">
+            {/* --- NOTIFICATION BELL --- */}
+            <div className="relative mr-4" ref={notifRef}>
+              <button
+                onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+                className="p-2 bg-white rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors relative shadow-sm"
+              >
+                <Bell size={20} />
+                {notifications.some((n) => !n.isRead) && (
+                  <span className="absolute top-0 right-0 h-3 w-3 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>
+                )}
+              </button>
+
+              {/* DROPDOWN */}
+              {showNotifDropdown && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-in slide-in-from-top-2 duration-200">
+                  <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
+                    <span className="font-bold text-xs uppercase tracking-widest text-slate-500">
+                      Notifications
+                    </span>
+                    <button
+                      onClick={handleClearAllNotifications}
+                      className="text-[10px] font-bold text-indigo-600 hover:underline"
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+                  <div className="max-h-64 overflow-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 text-xs italic">
+                        No new alerts
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => handleMarkRead(n.id)}
+                          className={`p-4 border-b hover:bg-slate-50 cursor-pointer transition-colors ${!n.isRead ? "bg-indigo-50/30" : ""}`}
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <span
+                              className={`font-bold text-sm ${!n.isRead ? "text-indigo-700" : "text-slate-700"}`}
+                            >
+                              {n.title}
+                            </span>
+                            {!n.isRead && (
+                              <span className="h-2 w-2 bg-indigo-500 rounded-full"></span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 leading-relaxed mb-1">
+                            {n.message}
+                          </p>
+                          <span className="text-[9px] font-black text-slate-300 uppercase block">
+                            {new Date(n.createdAt).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* --- END BELL --- */}
+
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-slate-200 shadow-sm">
+              {currentUser.role === "admin" ? (
+                <ShieldCheck size={16} className="text-indigo-600" />
+              ) : currentUser.role === "manager" ? (
+                <ShieldAlert size={16} className="text-amber-600" />
+              ) : (
+                <UserIcon size={16} className="text-emerald-600" />
+              )}
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                {currentUser.role} Session
+              </span>
+            </div>
           </div>
         </header>
 
+        {/* ... Rest of Main Content (Section, Dashboards, etc) ... */}
         <section className="max-w-6xl mx-auto">
           {view === "dashboard" &&
             (currentUser.role !== "sales" ? (
@@ -392,7 +529,7 @@ export default function App() {
                   : usages.filter((u) => u.salespersonId === currentUser.id)
               }
               userRole={currentUser.role}
-              onViewImage={(src: string) => setViewImage(src)} // Pass handler here
+              onViewImage={setViewImage}
             />
           )}
           {view === "users" && (
@@ -428,7 +565,23 @@ export default function App() {
   );
 }
 
-// Image Viewer Modal
+// --- NEW COMPONENT: TOASTER ---
+function Toast({ message, show }: { message: string; show: boolean }) {
+  if (!show) return null;
+  return (
+    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-3 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-top-4 duration-300">
+      <div className="p-2 bg-white/10 rounded-full">
+        <Info size={20} className="text-sky-400" />
+      </div>
+      <div>
+        <div className="font-bold text-sm">Notification</div>
+        <div className="text-xs text-slate-300">{message}</div>
+      </div>
+    </div>
+  );
+}
+
+// ... (Keep ImageViewer, ActivityLog, Login, etc. exactly the same as before)
 function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
   if (!src) return null;
   return (
@@ -663,454 +816,7 @@ function Login({ onLogin }: { onLogin: (user: User, token: string) => void }) {
   );
 }
 
-function ReportsManager({ requests, usages, refresh, userRole }: any) {
-  const [tab, setTab] = useState<"usage" | "request">("usage");
-  const [editingUsage, setEditingUsage] = useState<UsageRecord | null>(null);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-
-  const filteredUsages = useMemo(() => {
-    return usages.filter((u: UsageRecord) => {
-      const date = new Date(u.usedAt);
-      const start = startDate ? new Date(startDate) : null;
-      const end = endDate ? new Date(endDate) : null;
-      if (start) start.setHours(0, 0, 0, 0);
-      if (end) end.setHours(23, 59, 59, 999);
-      return (!start || date >= start) && (!end || date <= end);
-    });
-  }, [usages, startDate, endDate]);
-
-  const filteredRequests = useMemo(() => {
-    return requests.filter((r: RequestRecord) => {
-      const date = new Date(r.createdAt);
-      const start = startDate ? new Date(startDate) : null;
-      const end = endDate ? new Date(endDate) : null;
-      if (start) start.setHours(0, 0, 0, 0);
-      if (end) end.setHours(23, 59, 59, 999);
-      return (!start || date >= start) && (!end || date <= end);
-    });
-  }, [requests, startDate, endDate]);
-
-  const handleDeleteUsage = async (id: string) => {
-    if (confirm("Delete this usage log? This will adjust on-hand inventory.")) {
-      await db.usages.delete(id);
-      await refresh();
-    }
-  };
-
-  const handleUpdateUsage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingUsage) {
-      await db.usages.update(editingUsage);
-      await refresh();
-      setEditingUsage(null);
-    }
-  };
-
-  const handleDeleteRequest = async (id: string) => {
-    if (confirm("Delete this request record permanently?")) {
-      await db.requests.delete(id);
-      await refresh();
-    }
-  };
-
-  const canEditReports = userRole === "admin";
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex p-1 bg-slate-200/50 rounded-xl w-fit">
-          <button
-            onClick={() => setTab("usage")}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === "usage" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500"}`}
-          >
-            Deployments
-          </button>
-          <button
-            onClick={() => setTab("request")}
-            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === "request" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500"}`}
-          >
-            Requisitions
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-          <Calendar size={16} className="text-slate-400 ml-1" />
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="text-xs font-bold outline-none border-none bg-transparent"
-          />
-          <span className="text-slate-300 text-xs">to</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="text-xs font-bold outline-none border-none bg-transparent"
-          />
-          {(startDate || endDate) && (
-            <button
-              onClick={() => {
-                setStartDate("");
-                setEndDate("");
-              }}
-              className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg"
-            >
-              <RotateCcw size={14} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-300">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b">
-            <tr>
-              <th className="px-6 py-4">Date</th>
-              <th className="px-6 py-4">
-                {tab === "usage" ? "Shop" : "Requester"}
-              </th>
-              <th className="px-6 py-4">Item(s)</th>
-              <th className="px-6 py-4">Status / Staff</th>
-              {canEditReports && (
-                <th className="px-6 py-4 text-right">Actions</th>
-              )}
-            </tr>
-          </thead>
-          <tbody className="divide-y text-sm">
-            {tab === "usage" ? (
-              filteredUsages.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={canEditReports ? 5 : 4}
-                    className="p-10 text-center text-slate-400 italic"
-                  >
-                    No logs found in this period.
-                  </td>
-                </tr>
-              ) : (
-                filteredUsages.map((u) => (
-                  <tr
-                    key={u.id}
-                    className="hover:bg-slate-50 group transition-colors"
-                  >
-                    <td className="px-6 py-4 text-slate-500">
-                      {new Date(u.usedAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 font-bold">{u.shopName}</td>
-                    <td className="px-6 py-4 text-indigo-600 font-bold">
-                      {u.partType}
-                    </td>
-                    <td className="px-6 py-4 font-medium">
-                      {u.salespersonName}
-                    </td>
-                    {canEditReports && (
-                      <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => setEditingUsage(u)}
-                          className="p-2 text-slate-400 hover:text-indigo-600"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUsage(u.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              )
-            ) : filteredRequests.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={canEditReports ? 5 : 4}
-                  className="p-10 text-center text-slate-400 italic"
-                >
-                  No requests found in this period.
-                </td>
-              </tr>
-            ) : (
-              filteredRequests.map((r) => (
-                <tr
-                  key={r.id}
-                  className="hover:bg-slate-50 group transition-colors"
-                >
-                  <td className="px-6 py-4 text-slate-500">
-                    {new Date(r.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 font-bold">{r.requesterName}</td>
-                  <td className="px-6 py-4">
-                    {r.items.map((i) => `${i.quantity}x ${i.type}`).join(", ")}
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge status={r.status} />
-                  </td>
-                  {canEditReports && (
-                    <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => handleDeleteRequest(r.id)}
-                        className="p-2 text-slate-400 hover:text-rose-600"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {editingUsage && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-6 z-50 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Edit Transaction</h2>
-              <button onClick={() => setEditingUsage(null)}>
-                <X />
-              </button>
-            </div>
-            <form onSubmit={handleUpdateUsage} className="space-y-4">
-              <div>
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                  Shop Name
-                </label>
-                <input
-                  value={editingUsage.shopName}
-                  onChange={(e) =>
-                    setEditingUsage({
-                      ...editingUsage,
-                      shopName: e.target.value,
-                    })
-                  }
-                  className="w-full p-4 border rounded-xl mt-1 outline-none focus:border-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                  Equipment Type
-                </label>
-                <select
-                  value={editingUsage.partType}
-                  onChange={(e) =>
-                    setEditingUsage({
-                      ...editingUsage,
-                      partType: e.target.value as PartType,
-                    })
-                  }
-                  className="w-full p-4 border rounded-xl mt-1 outline-none"
-                >
-                  {SPARE_PARTS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="submit"
-                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg hover:bg-indigo-700 transition-all"
-              >
-                <Save size={18} /> Commit Update
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function UserManagement({
-  users,
-  currentUserRole,
-  onAddUser,
-  onDeleteUser,
-  onUpdateUser,
-}: {
-  users: User[];
-  currentUserRole: "admin" | "manager" | "sales";
-  onAddUser: any;
-  onDeleteUser: any;
-  onUpdateUser: any;
-}) {
-  const [isAdding, setIsAdding] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    role: "sales" as "admin" | "manager" | "sales",
-    password: "",
-  });
-
-  const reset = () => {
-    setFormData({ name: "", role: "sales", password: "" });
-    setIsAdding(false);
-    setEditingUser(null);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingUser) onUpdateUser({ ...editingUser, ...formData });
-    else onAddUser(formData.name, formData.role, formData.password);
-    reset();
-  };
-
-  const canManage = (user: User) => {
-    if (currentUserRole === "admin") return true;
-    if (currentUserRole === "manager") return user.role !== "admin";
-    return false;
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold text-slate-800 tracking-tight">
-          Staff Account Management
-        </h2>
-        <button
-          onClick={() => setIsAdding(!isAdding)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition-all shadow-xl shadow-indigo-100"
-        >
-          {isAdding ? <XCircle size={18} /> : <UserPlus size={18} />}
-          {isAdding ? "Cancel" : "Register New User"}
-        </button>
-      </div>
-
-      {isAdding && (
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white p-10 rounded-3xl border border-indigo-100 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">
-                Full Staff Name
-              </label>
-              <input
-                autoFocus
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                className="w-full p-4 border rounded-xl outline-none focus:border-indigo-500 shadow-sm"
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">
-                Role Permission
-              </label>
-              <select
-                value={formData.role}
-                onChange={(e) =>
-                  setFormData({ ...formData, role: e.target.value as any })
-                }
-                className="w-full p-4 border rounded-xl outline-none shadow-sm"
-              >
-                <option value="sales">Sales Representative</option>
-                <option value="manager">Regional Manager</option>
-                {currentUserRole === "admin" && (
-                  <option value="admin">System Administrator</option>
-                )}
-              </select>
-            </div>
-            <div className="md:col-span-2 space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">
-                Access Password {editingUser && "(Leave blank to keep current)"}
-              </label>
-              <input
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                className="w-full p-4 border rounded-xl outline-none focus:border-indigo-500 shadow-sm"
-                required={!editingUser}
-              />
-            </div>
-          </div>
-          <button
-            type="submit"
-            className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 transition-all hover:bg-indigo-700 active:scale-95"
-          >
-            {editingUser ? "Update Database Record" : "Create System Account"}
-          </button>
-        </form>
-      )}
-
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="divide-y">
-          {users.map((u: User) => {
-            const allowed = canManage(u);
-            return (
-              <div
-                key={u.id}
-                className="p-6 flex items-center justify-between group hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center gap-5">
-                  <div
-                    className={`h-14 w-14 rounded-2xl ${u.avatarColor || "bg-gray-400"} flex items-center justify-center text-white font-black text-xl shadow-inner`}
-                  >
-                    {u.name.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="font-bold text-slate-900 flex items-center gap-2 text-lg">
-                      {u.name}
-                      {u.role === "admin" ? (
-                        <ShieldCheck size={16} className="text-indigo-600" />
-                      ) : u.role === "manager" ? (
-                        <ShieldAlert size={16} className="text-amber-600" />
-                      ) : (
-                        <UserIcon size={16} className="text-emerald-600" />
-                      )}
-                    </div>
-                    <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                      {u.role} Account
-                    </div>
-                  </div>
-                </div>
-
-                {allowed ? (
-                  <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => {
-                        setEditingUser(u);
-                        setFormData({
-                          name: u.name,
-                          role: u.role,
-                          password: "",
-                        });
-                        setIsAdding(true);
-                      }}
-                      className="p-3 text-slate-400 hover:text-indigo-600 bg-white border rounded-xl shadow-sm transition-all"
-                    >
-                      <Edit2 size={20} />
-                    </button>
-                    <button
-                      onClick={() => onDeleteUser(u.id)}
-                      className="p-3 text-slate-400 hover:text-rose-600 bg-white border rounded-xl shadow-sm transition-all"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="px-4 py-2 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-                    <Lock size={12} /> Restricted
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// ... Include AdminDashboard, ReportsManager, SalesDashboard, RequestForm, StatCard, etc. exactly as they were ...
 function AdminDashboard({
   requests,
   usages,
@@ -1596,7 +1302,7 @@ function InsightsView({
       </div>
       <p className="text-slate-500 text-lg leading-relaxed font-medium">
         Gemini AI parses your shop history and requisition logs to optimize
-        stock distribution and identify high-consumption nodes.
+        stock distribution.
       </p>
 
       {!aiInsights && !isAnalyzing && (
@@ -1632,6 +1338,454 @@ function InsightsView({
           {aiInsights}
         </div>
       )}
+    </div>
+  );
+}
+
+function ReportsManager({ requests, usages, refresh, userRole }: any) {
+  const [tab, setTab] = useState<"usage" | "request">("usage");
+  const [editingUsage, setEditingUsage] = useState<UsageRecord | null>(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const filteredUsages = useMemo(() => {
+    return usages.filter((u: UsageRecord) => {
+      const date = new Date(u.usedAt);
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+      if (start) start.setHours(0, 0, 0, 0);
+      if (end) end.setHours(23, 59, 59, 999);
+      return (!start || date >= start) && (!end || date <= end);
+    });
+  }, [usages, startDate, endDate]);
+
+  const filteredRequests = useMemo(() => {
+    return requests.filter((r: RequestRecord) => {
+      const date = new Date(r.createdAt);
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+      if (start) start.setHours(0, 0, 0, 0);
+      if (end) end.setHours(23, 59, 59, 999);
+      return (!start || date >= start) && (!end || date <= end);
+    });
+  }, [requests, startDate, endDate]);
+
+  const handleDeleteUsage = async (id: string) => {
+    if (confirm("Delete this usage log? This will adjust on-hand inventory.")) {
+      await db.usages.delete(id);
+      await refresh();
+    }
+  };
+
+  const handleUpdateUsage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingUsage) {
+      await db.usages.update(editingUsage);
+      await refresh();
+      setEditingUsage(null);
+    }
+  };
+
+  const handleDeleteRequest = async (id: string) => {
+    if (confirm("Delete this request record permanently?")) {
+      await db.requests.delete(id);
+      await refresh();
+    }
+  };
+
+  const canEditReports = userRole === "admin";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex p-1 bg-slate-200/50 rounded-xl w-fit">
+          <button
+            onClick={() => setTab("usage")}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === "usage" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500"}`}
+          >
+            Deployments
+          </button>
+          <button
+            onClick={() => setTab("request")}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === "request" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500"}`}
+          >
+            Requisitions
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+          <Calendar size={16} className="text-slate-400 ml-1" />
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="text-xs font-bold outline-none border-none bg-transparent"
+          />
+          <span className="text-slate-300 text-xs">to</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="text-xs font-bold outline-none border-none bg-transparent"
+          />
+          {(startDate || endDate) && (
+            <button
+              onClick={() => {
+                setStartDate("");
+                setEndDate("");
+              }}
+              className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg"
+            >
+              <RotateCcw size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-300">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b">
+            <tr>
+              <th className="px-6 py-4">Date</th>
+              <th className="px-6 py-4">
+                {tab === "usage" ? "Shop" : "Requester"}
+              </th>
+              <th className="px-6 py-4">Item(s)</th>
+              <th className="px-6 py-4">Status / Staff</th>
+              {canEditReports && (
+                <th className="px-6 py-4 text-right">Actions</th>
+              )}
+            </tr>
+          </thead>
+          <tbody className="divide-y text-sm">
+            {tab === "usage" ? (
+              filteredUsages.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={canEditReports ? 5 : 4}
+                    className="p-10 text-center text-slate-400 italic"
+                  >
+                    No logs found in this period.
+                  </td>
+                </tr>
+              ) : (
+                filteredUsages.map((u) => (
+                  <tr
+                    key={u.id}
+                    className="hover:bg-slate-50 group transition-colors"
+                  >
+                    <td className="px-6 py-4 text-slate-500">
+                      {new Date(u.usedAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 font-bold">{u.shopName}</td>
+                    <td className="px-6 py-4 text-indigo-600 font-bold">
+                      {u.partType}
+                    </td>
+                    <td className="px-6 py-4 font-medium">
+                      {u.salespersonName}
+                    </td>
+                    {canEditReports && (
+                      <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => setEditingUsage(u)}
+                          className="p-2 text-slate-400 hover:text-indigo-600"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUsage(u.id)}
+                          className="p-2 text-slate-400 hover:text-rose-600"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )
+            ) : filteredRequests.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={canEditReports ? 5 : 4}
+                  className="p-10 text-center text-slate-400 italic"
+                >
+                  No requests found in this period.
+                </td>
+              </tr>
+            ) : (
+              filteredRequests.map((r) => (
+                <tr
+                  key={r.id}
+                  className="hover:bg-slate-50 group transition-colors"
+                >
+                  <td className="px-6 py-4 text-slate-500">
+                    {new Date(r.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 font-bold">{r.requesterName}</td>
+                  <td className="px-6 py-4">
+                    {r.items.map((i) => `${i.quantity}x ${i.type}`).join(", ")}
+                  </td>
+                  <td className="px-6 py-4">
+                    <StatusBadge status={r.status} />
+                  </td>
+                  {canEditReports && (
+                    <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleDeleteRequest(r.id)}
+                        className="p-2 text-slate-400 hover:text-rose-600"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {editingUsage && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-6 z-50 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold">Edit Transaction</h2>
+              <button onClick={() => setEditingUsage(null)}>
+                <X />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateUsage} className="space-y-4">
+              <div>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                  Shop Name
+                </label>
+                <input
+                  value={editingUsage.shopName}
+                  onChange={(e) =>
+                    setEditingUsage({
+                      ...editingUsage,
+                      shopName: e.target.value,
+                    })
+                  }
+                  className="w-full p-4 border rounded-xl mt-1 outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                  Equipment Type
+                </label>
+                <select
+                  value={editingUsage.partType}
+                  onChange={(e) =>
+                    setEditingUsage({
+                      ...editingUsage,
+                      partType: e.target.value as PartType,
+                    })
+                  }
+                  className="w-full p-4 border rounded-xl mt-1 outline-none"
+                >
+                  {SPARE_PARTS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="submit"
+                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg hover:bg-indigo-700 transition-all"
+              >
+                <Save size={18} /> Commit Update
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserManagement({
+  users,
+  currentUserRole,
+  onAddUser,
+  onDeleteUser,
+  onUpdateUser,
+}: {
+  users: User[];
+  currentUserRole: "admin" | "manager" | "sales";
+  onAddUser: any;
+  onDeleteUser: any;
+  onUpdateUser: any;
+}) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    role: "sales" as "admin" | "manager" | "sales",
+    password: "",
+  });
+
+  const reset = () => {
+    setFormData({ name: "", role: "sales", password: "" });
+    setIsAdding(false);
+    setEditingUser(null);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingUser) onUpdateUser({ ...editingUser, ...formData });
+    else onAddUser(formData.name, formData.role, formData.password);
+    reset();
+  };
+
+  const canManage = (user: User) => {
+    if (currentUserRole === "admin") return true;
+    if (currentUserRole === "manager") return user.role !== "admin";
+    return false;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold text-slate-800 tracking-tight">
+          Staff Account Management
+        </h2>
+        <button
+          onClick={() => setIsAdding(!isAdding)}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition-all shadow-xl shadow-indigo-100"
+        >
+          {isAdding ? <XCircle size={18} /> : <UserPlus size={18} />}
+          {isAdding ? "Cancel" : "Register New User"}
+        </button>
+      </div>
+
+      {isAdding && (
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white p-10 rounded-3xl border border-indigo-100 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">
+                Full Staff Name
+              </label>
+              <input
+                autoFocus
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                className="w-full p-4 border rounded-xl outline-none focus:border-indigo-500 shadow-sm"
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">
+                Role Permission
+              </label>
+              <select
+                value={formData.role}
+                onChange={(e) =>
+                  setFormData({ ...formData, role: e.target.value as any })
+                }
+                className="w-full p-4 border rounded-xl outline-none shadow-sm"
+              >
+                <option value="sales">Sales Representative</option>
+                <option value="manager">Regional Manager</option>
+                {currentUserRole === "admin" && (
+                  <option value="admin">System Administrator</option>
+                )}
+              </select>
+            </div>
+            <div className="md:col-span-2 space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">
+                Access Password {editingUser && "(Leave blank to keep current)"}
+              </label>
+              <input
+                value={formData.password}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
+                className="w-full p-4 border rounded-xl outline-none focus:border-indigo-500 shadow-sm"
+                required={!editingUser}
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 transition-all hover:bg-indigo-700 active:scale-95"
+          >
+            {editingUser ? "Update Database Record" : "Create System Account"}
+          </button>
+        </form>
+      )}
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="divide-y">
+          {users.map((u: User) => {
+            const allowed = canManage(u);
+            return (
+              <div
+                key={u.id}
+                className="p-6 flex items-center justify-between group hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center gap-5">
+                  <div
+                    className={`h-14 w-14 rounded-2xl ${u.avatarColor || "bg-gray-400"} flex items-center justify-center text-white font-black text-xl shadow-inner`}
+                  >
+                    {u.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-900 flex items-center gap-2 text-lg">
+                      {u.name}
+                      {u.role === "admin" ? (
+                        <ShieldCheck size={16} className="text-indigo-600" />
+                      ) : u.role === "manager" ? (
+                        <ShieldAlert size={16} className="text-amber-600" />
+                      ) : (
+                        <UserIcon size={16} className="text-emerald-600" />
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                      {u.role} Account
+                    </div>
+                  </div>
+                </div>
+
+                {allowed ? (
+                  <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => {
+                        setEditingUser(u);
+                        setFormData({
+                          name: u.name,
+                          role: u.role,
+                          password: "",
+                        });
+                        setIsAdding(true);
+                      }}
+                      className="p-3 text-slate-400 hover:text-indigo-600 bg-white border rounded-xl shadow-sm transition-all"
+                    >
+                      <Edit2 size={20} />
+                    </button>
+                    <button
+                      onClick={() => onDeleteUser(u.id)}
+                      className="p-3 text-slate-400 hover:text-rose-600 bg-white border rounded-xl shadow-sm transition-all"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="px-4 py-2 bg-slate-100 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                    <Lock size={12} /> Restricted
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

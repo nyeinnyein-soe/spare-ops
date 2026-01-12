@@ -41,7 +41,15 @@ export interface UsageRecord {
   usedAt: number;
   salespersonId: string;
   salespersonName: string;
-  voucherImage?: string; // Base64 string for the voucher photo
+  voucherImage?: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 export const SPARE_PARTS: PartType[] = [

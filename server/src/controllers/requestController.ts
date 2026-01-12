@@ -1,17 +1,13 @@
 import { Request, Response } from "express";
 import prisma from "../db";
+import { sendNotification } from "./notificationController";
 
 export const getRequests = async (req: Request, res: Response) => {
   try {
     const requests = await prisma.request.findMany({
-      include: { items: true }, // Join the items table
+      include: { items: true },
       orderBy: { createdAt: "desc" },
     });
-
-    // Flatten structure to match frontend expectations if necessary
-    // But your frontend expects `requesterName`.
-    // We should fetch the user name or store it.
-    // Ideally, perform a join with User table.
 
     const enrichedRequests = await Promise.all(
       requests.map(async (r) => {
@@ -42,10 +38,27 @@ export const createRequest = async (req: Request, res: Response) => {
       data: {
         requesterId,
         items: {
-          create: items, // Prisma handles the nested insert automatically
+          create: items,
         },
       },
     });
+
+    // triger notification
+    const managers = await prisma.user.findMany({
+      where: { role: { in: ["admin", "manager"] } },
+    });
+    const requester = await prisma.user.findUnique({
+      where: { id: requesterId },
+    });
+
+    for (const manager of managers) {
+      await sendNotification(
+        manager.id,
+        "New Requisition",
+        `${requester?.name || "Staff"} requested new stock.`,
+      );
+    }
+
     res.status(201).json({ message: "Request created" });
   } catch (error) {
     res.status(500).json({ error: "Failed to create request" });
@@ -66,6 +79,35 @@ export const updateStatus = async (req: Request, res: Response) => {
       where: { id },
       data,
     });
+
+    const updatedRequest = await prisma.request.update({
+      where: { id },
+      data,
+      include: { requester: true },
+    });
+
+    if (status === "RECEIVED") {
+      // notify to admin/manager if collected
+      const managers = await prisma.user.findMany({
+        where: { role: { in: ["admin", "manager"] } },
+      });
+
+      for (const manager of managers) {
+        await sendNotification(
+          manager.id,
+          "Stock Collected",
+          `${updatedRequest.requester.name} has collected their items.`,
+        );
+      }
+    } else {
+      // notify to himself if approved or rejected
+      await sendNotification(
+        updatedRequest.requesterId,
+        `Request ${status}`,
+        `Your request has been ${status.toLowerCase()}.`,
+      );
+    }
+
     res.json({ message: "Status updated" });
   } catch (error) {
     res.status(500).json({ error: "Update failed" });

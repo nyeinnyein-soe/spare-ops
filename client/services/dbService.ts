@@ -5,6 +5,7 @@ import {
   UsageRecord,
   RequestStatus,
   PartType,
+  NotificationItem,
 } from "../types";
 
 export const db = {
@@ -56,6 +57,17 @@ export const db = {
     },
     delete: async (id: string): Promise<void> => {
       await api.delete(`/usages/${id}`);
+    },
+  },
+  notifications: {
+    select: async (): Promise<NotificationItem[]> => {
+      return api.get("/notifications");
+    },
+    markRead: async (id: string): Promise<void> => {
+      return api.patch(`/notifications/${id}/read`, {});
+    },
+    clearAll: async (): Promise<void> => {
+      return api.post("/notifications/clear", {});
     },
   },
 };
