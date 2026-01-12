@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  manager
+  sales
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RECEIVED
+}
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  role        Role
+  password    String
+  avatarColor String   @default("bg-indigo-600")
+  createdAt   DateTime @default(now())
+
+  // Relations
+  requests Request[]
+  usages   Usage[]
+
+  @@map("users")
+}
+
+model Request {
+  id          String        @id @default(uuid())
+  requesterId String
+  status      RequestStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  approvedAt  DateTime?
+
+  // Relations
+  requester User          @relation(fields: [requesterId], references: [id])
+  items     RequestItem[]
+
+  @@map("requests")
+}
+
+model RequestItem {
+  id        String @id @default(uuid())
+  requestId String
+  type      String // e.g., "Remax Charger"
+  quantity  Int
+
+  // Relations
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("request_items")
+}
+
+model Usage {
+  id            String   @id @default(uuid())
+  shopName      String
+  partType      String
+  usedAt        DateTime @default(now())
+  salespersonId String
+  voucherImage  String?
+
+  // Relations
+  salesperson User @relation(fields: [salespersonId], references: [id])
+
+  @@map("usages")
+}
