@@ -1,10 +1,19 @@
-import { useState, useMemo } from "react";
-import { Calendar, RotateCcw, Edit2, Trash2, Save, X } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import {
+  Calendar,
+  RotateCcw,
+  Edit2,
+  Trash2,
+  Save,
+  X,
+  Download,
+} from "lucide-react";
 import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
 import { db } from "../services/dbService";
-import { RequestStatus, SPARE_PARTS, PartType, UsageRecord } from "../types";
+import { SPARE_PARTS, PartType, UsageRecord } from "../types";
 import StatusBadge from "../components/StatusBadge";
+import { exportToExcel } from "../utils/excelHelper";
 
 export default function Reports() {
   const { requests, usages, refreshData } = useData();
@@ -36,6 +45,33 @@ export default function Reports() {
       return (!start || date >= start) && (!end || date <= end);
     });
   }, [requests, startDate, endDate]);
+
+  const handleExport = async () => {
+    const timestamp = new Date().toISOString().split("T")[0];
+
+    if (tab === "usage") {
+      const dataToExport = filteredUsages.map((u) => ({
+        Date: new Date(u.usedAt).toLocaleDateString(),
+        "Shop Name": u.shopName,
+        "Item Type": u.partType,
+        "Staff Name": u.salespersonName,
+        "Reference ID": u.id,
+      }));
+      await exportToExcel(dataToExport, `Deployments_Report_${timestamp}`);
+    } else {
+      const dataToExport = filteredRequests.map((r) => ({
+        "Date Created": new Date(r.createdAt).toLocaleDateString(),
+        Requester: r.requesterName,
+        Items: r.items.map((i) => `${i.quantity}x ${i.type}`).join(", "),
+        Status: r.status,
+        "Approved Date": r.approvedAt
+          ? new Date(r.approvedAt).toLocaleDateString()
+          : "-",
+        "Reference ID": r.id,
+      }));
+      await exportToExcel(dataToExport, `Requisitions_Report_${timestamp}`);
+    }
+  };
 
   const handleUpdateUsage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +114,7 @@ export default function Reports() {
                       shopName: e.target.value,
                     })
                   }
-                  className="w-full p-4 border rounded-xl mt-1"
+                  className="w-full p-4 border rounded-xl mt-1 outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
@@ -93,7 +129,7 @@ export default function Reports() {
                       partType: e.target.value as PartType,
                     })
                   }
-                  className="w-full p-4 border rounded-xl mt-1"
+                  className="w-full p-4 border rounded-xl mt-1 outline-none"
                 >
                   {SPARE_PARTS.map((p) => (
                     <option key={p} value={p}>
@@ -102,7 +138,7 @@ export default function Reports() {
                   ))}
                 </select>
               </div>
-              <button className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black">
+              <button className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all">
                 Save
               </button>
             </form>
@@ -110,47 +146,57 @@ export default function Reports() {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="flex p-1 bg-slate-200/50 rounded-xl w-fit">
           <button
             onClick={() => setTab("usage")}
-            className={`px-6 py-2 rounded-lg text-sm font-bold ${tab === "usage" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500"}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === "usage" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500"}`}
           >
             Deployments
           </button>
           <button
             onClick={() => setTab("request")}
-            className={`px-6 py-2 rounded-lg text-sm font-bold ${tab === "request" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500"}`}
+            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${tab === "request" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500"}`}
           >
             Requisitions
           </button>
         </div>
-        <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-          <Calendar size={16} className="text-slate-400 ml-1" />
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="text-xs font-bold outline-none border-none bg-transparent"
-          />
-          <span className="text-slate-300 text-xs">to</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="text-xs font-bold outline-none border-none bg-transparent"
-          />
-          {(startDate || endDate) && (
-            <button
-              onClick={() => {
-                setStartDate("");
-                setEndDate("");
-              }}
-              className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg"
-            >
-              <RotateCcw size={14} />
-            </button>
-          )}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+            <Calendar size={16} className="text-slate-400 ml-1" />
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="text-xs font-bold outline-none border-none bg-transparent"
+            />
+            <span className="text-slate-300 text-xs">to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="text-xs font-bold outline-none border-none bg-transparent"
+            />
+            {(startDate || endDate) && (
+              <button
+                onClick={() => {
+                  setStartDate("");
+                  setEndDate("");
+                }}
+                className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg"
+              >
+                <RotateCcw size={14} />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all active:scale-95"
+          >
+            <Download size={16} /> Export Excel
+          </button>
         </div>
       </div>
 
@@ -172,7 +218,10 @@ export default function Reports() {
           <tbody className="divide-y text-sm">
             {tab === "usage"
               ? filteredUsages.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50 group">
+                  <tr
+                    key={u.id}
+                    className="hover:bg-slate-50 group transition-colors"
+                  >
                     <td className="px-6 py-4 text-slate-500">
                       {new Date(u.usedAt).toLocaleDateString()}
                     </td>
@@ -184,7 +233,7 @@ export default function Reports() {
                       {u.salespersonName}
                     </td>
                     {currentUser?.role === "admin" && (
-                      <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100">
+                      <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => setEditingUsage(u)}
                           className="p-2 text-slate-400 hover:text-indigo-600"
@@ -202,7 +251,10 @@ export default function Reports() {
                   </tr>
                 ))
               : filteredRequests.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50 group">
+                  <tr
+                    key={r.id}
+                    className="hover:bg-slate-50 group transition-colors"
+                  >
                     <td className="px-6 py-4 text-slate-500">
                       {new Date(r.createdAt).toLocaleDateString()}
                     </td>
@@ -216,7 +268,7 @@ export default function Reports() {
                       <StatusBadge status={r.status} />
                     </td>
                     {currentUser?.role === "admin" && (
-                      <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100">
+                      <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => deleteItem("request", r.id)}
                           className="p-2 text-slate-400 hover:text-rose-600"
