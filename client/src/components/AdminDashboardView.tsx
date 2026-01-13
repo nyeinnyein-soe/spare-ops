@@ -12,7 +12,7 @@ export default function AdminDashboardView({
   const pending = requests.filter(
     (r: RequestRecord) => r.status === RequestStatus.PENDING,
   );
-  const recentUsages = usages.slice(0, 10);
+  const recentUsages = usages.slice(0, 5);
 
   const handleUpdate = async (id: string, status: RequestStatus) => {
     await db.requests.updateStatus(id, status);
