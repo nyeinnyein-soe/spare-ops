@@ -26,7 +26,7 @@ export default function NewRequest() {
       Object.entries(qtys).map(([type, quantity]) => ({
         type: type as PartType,
         quantity,
-      })),
+      })).filter(i => i.quantity > 0),
     );
     await refreshData();
     navigate("/");
