@@ -4,11 +4,12 @@ import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
 import StatusBadge from "../components/StatusBadge";
 import ImageViewer from "../components/ImageViewer";
+import DateRangePicker from "../components/DateRangePicker";
 
 export default function History() {
   const { requests, usages } = useData();
   const { currentUser } = useAuth();
-  
+
   const [tab, setTab] = useState<"r" | "u">("r");
   const [viewImage, setViewImage] = useState<string | null>(null);
 
@@ -20,7 +21,7 @@ export default function History() {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     return `${year}-${month}-01`;
   });
-  
+
   const [endDate, setEndDate] = useState(() => {
     // Current date in YYYY-MM-DD
     return new Date().toISOString().split('T')[0];
@@ -31,7 +32,7 @@ export default function History() {
     const date = new Date(timestamp);
     const start = startDate ? new Date(startDate) : null;
     const end = endDate ? new Date(endDate) : null;
-    
+
     // Normalize times to ensure inclusive filtering
     if (start) start.setHours(0, 0, 0, 0);
     if (end) end.setHours(23, 59, 59, 999);
@@ -40,16 +41,16 @@ export default function History() {
   };
 
   const filteredRequests = useMemo(() => {
-    const roleFiltered = currentUser?.role === "sales" 
-      ? requests.filter(r => r.requesterId === currentUser.id) 
+    const roleFiltered = currentUser?.role === "sales"
+      ? requests.filter(r => r.requesterId === currentUser.id)
       : requests;
-    
+
     return roleFiltered.filter(r => filterByDate(r.createdAt));
   }, [requests, currentUser, startDate, endDate]);
 
   const filteredUsages = useMemo(() => {
-    const roleFiltered = currentUser?.role === "sales" 
-      ? usages.filter(u => u.salespersonId === currentUser.id) 
+    const roleFiltered = currentUser?.role === "sales"
+      ? usages.filter(u => u.salespersonId === currentUser.id)
       : usages;
 
     return roleFiltered.filter(u => filterByDate(u.usedAt));
@@ -60,7 +61,7 @@ export default function History() {
     const d = new Date();
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
-    
+
     setStartDate(`${year}-${month}-01`); // 1st of this month
     setEndDate(d.toISOString().split('T')[0]); // Today
   };
@@ -68,7 +69,7 @@ export default function History() {
   return (
     <div className="bg-white rounded-[2rem] border shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
       {viewImage && <ImageViewer src={viewImage} onClose={() => setViewImage(null)} />}
-      
+
       {/* TABS */}
       <div className="flex border-b bg-slate-50/50">
         <button onClick={() => setTab("r")} className={`flex-1 py-6 text-[10px] font-black uppercase tracking-widest transition-all ${tab === "r" ? "text-indigo-600 border-b-2 border-indigo-600 bg-white" : "text-slate-400 hover:bg-white/50"}`}>Requisitions</button>
@@ -77,24 +78,22 @@ export default function History() {
 
       {/* DATE FILTER TOOLBAR */}
       <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-end">
-        <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-sm">
-          <Calendar size={16} className="text-slate-400 ml-1" />
-          <input 
-            type="date" 
-            value={startDate} 
-            onChange={(e) => setStartDate(e.target.value)} 
-            className="text-xs font-bold outline-none border-none bg-transparent text-slate-600" 
+        <div className="flex items-center bg-slate-50 rounded-xl border border-slate-200 shadow-sm overflow-hidden pr-2">
+
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(start, end) => {
+              setStartDate(start);
+              setEndDate(end);
+            }}
           />
-          <span className="text-slate-300 text-xs">to</span>
-          <input 
-            type="date" 
-            value={endDate} 
-            onChange={(e) => setEndDate(e.target.value)} 
-            className="text-xs font-bold outline-none border-none bg-transparent text-slate-600" 
-          />
-          <button 
-            onClick={handleResetDates} 
-            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all"
+
+          <div className="w-px h-5 bg-slate-200 mx-1"></div>
+
+          <button
+            onClick={handleResetDates}
+            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all"
             title="Reset to current month"
           >
             <RotateCcw size={14} />
