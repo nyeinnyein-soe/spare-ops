@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { RotateCcw, Edit2, Trash2, X, Download } from "lucide-react";
+import { RotateCcw, Edit2, Trash2, X, Download, Image as ImageIcon } from "lucide-react"; // <--- Added ImageIcon
 import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
 import { db } from "../services/dbService";
@@ -7,6 +7,7 @@ import { SPARE_PARTS, PartType, UsageRecord } from "../types";
 import StatusBadge from "../components/StatusBadge";
 import { exportToExcel } from "../utils/excelHelper";
 import DateRangePicker from "../components/DateRangePicker";
+import ImageViewer from "../components/ImageViewer";
 
 export default function Reports() {
   const { requests, usages, refreshData } = useData();
@@ -14,6 +15,7 @@ export default function Reports() {
   
   const [tab, setTab] = useState<"usage" | "request">("request");
   const [editingUsage, setEditingUsage] = useState<UsageRecord | null>(null);
+  const [viewImage, setViewImage] = useState<string | null>(null);
 
   // --- DATE FILTER STATE ---
   const [startDate, setStartDate] = useState(() => {
@@ -65,16 +67,14 @@ export default function Reports() {
     const timestamp = new Date().toISOString().split('T')[0];
     
     if (tab === "usage") {
-      // 1. Export Deployments (Without Ref ID)
       const dataToExport = filteredUsages.map(u => ({
         "Date": new Date(u.usedAt).toLocaleDateString(),
         "Shop Name": u.shopName,
         "Item Type": u.partType,
-        "Staff Name": u.salespersonName
+        "Staff Name": u.salespersonName,
       }));
       await exportToExcel(dataToExport, `Deployments_Report_${timestamp}`);
     } else {
-      // 2. Export Requisitions (Without Ref ID)
       const dataToExport = filteredRequests.map(r => ({
         "Date Created": new Date(r.createdAt).toLocaleDateString(),
         "Requester": r.requesterName,
@@ -105,6 +105,9 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
+      {/* Image Modal */}
+      {viewImage && <ImageViewer src={viewImage} onClose={() => setViewImage(null)} />}
+
       {/* Edit Modal */}
       {editingUsage && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-6 z-50">
@@ -169,6 +172,9 @@ export default function Reports() {
           <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b">
             <tr>
               <th className="px-6 py-4">Date</th>
+              
+              {tab === "usage" && <th className="px-6 py-4">Proof</th>}
+              
               <th className="px-6 py-4">{tab === "usage" ? "Shop" : "Requester"}</th>
               <th className="px-6 py-4">Item(s)</th>
               <th className="px-6 py-4">Status / Staff</th>
@@ -179,6 +185,21 @@ export default function Reports() {
             {tab === "usage" ? filteredUsages.map(u => (
               <tr key={u.id} className="hover:bg-slate-50 group transition-colors">
                 <td className="px-6 py-4 text-slate-500">{new Date(u.usedAt).toLocaleDateString()}</td>
+                
+                {/* Image Cell */}
+                <td className="px-6 py-4">
+                  <div 
+                    className="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform"
+                    onClick={() => u.voucherImage && setViewImage(u.voucherImage)}
+                  >
+                    {u.voucherImage ? (
+                      <img src={u.voucherImage} className="w-full h-full object-cover" alt="Voucher" />
+                    ) : (
+                      <ImageIcon size={16} className="text-slate-300" />
+                    )}
+                  </div>
+                </td>
+
                 <td className="px-6 py-4 font-bold">{u.shopName}</td>
                 <td className="px-6 py-4 text-indigo-600 font-bold">{u.partType}</td>
                 <td className="px-6 py-4 font-medium">{u.salespersonName}</td>
