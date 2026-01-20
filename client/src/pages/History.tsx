@@ -62,14 +62,17 @@ export default function History() {
                     {new Date(r.createdAt).toLocaleString()}
                   </div>
                   <div className="flex gap-2 flex-wrap">
-                    {r.items.map((i, idx) => (
-                      <span
-                        key={idx}
-                        className="text-[10px] font-black px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-600"
-                      >
-                        {i.quantity}x {i.type}
-                      </span>
-                    ))}
+                    {r.items.map(
+                      (i, idx) =>
+                        i.quantity > 0 && (
+                          <span
+                            key={idx}
+                            className="text-[10px] font-black px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl text-slate-600"
+                          >
+                            {i.quantity}x {i.type}
+                          </span>
+                        ),
+                    )}
                   </div>
                 </div>
                 <StatusBadge status={r.status} />
