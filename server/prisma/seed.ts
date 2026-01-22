@@ -3,6 +3,13 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+const INITIAL_PARTS = [
+  "Remax Charger",
+  "Charging Cable",
+  "Micro Cable",
+  "Battery",
+];
+
 async function main() {
   // 1. Hash passwords
   const adminPassword = await bcrypt.hash("admin", 10);
@@ -27,6 +34,14 @@ async function main() {
       avatarColor: "bg-emerald-600",
     },
   });
+
+  for (const partName of INITIAL_PARTS) {
+    await prisma.inventoryItem.upsert({
+      where: { name: partName },
+      update: {},
+      create: { name: partName },
+    });
+  }
 
   console.log({ admin, sales });
 }

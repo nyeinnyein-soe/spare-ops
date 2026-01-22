@@ -6,6 +6,7 @@ import * as userController from "./controllers/userController";
 import * as requestController from "./controllers/requestController";
 import * as usageController from "./controllers/usageController";
 import * as notificationController from "./controllers/notificationController";
+import * as inventoryItemController from "./controllers/inventoryItemController";
 import { authenticateToken } from "./middleware/authMiddleware";
 
 dotenv.config();
@@ -27,22 +28,30 @@ apiRouter.post("/users", userController.createUser);
 apiRouter.put("/users/:id", userController.updateUser);
 apiRouter.delete("/users/:id", userController.deleteUser);
 
-// Requests (Requisitions)
 apiRouter.get("/requests", requestController.getRequests);
 apiRouter.post("/requests", requestController.createRequest);
 apiRouter.patch("/requests/:id/status", requestController.updateStatus);
 apiRouter.delete("/requests/:id", requestController.deleteRequest);
 
-// Usages (Deployments)
 apiRouter.get("/usages", usageController.getUsages);
 apiRouter.post("/usages", usageController.createUsage);
 apiRouter.put("/usages/:id", usageController.updateUsage);
 apiRouter.delete("/usages/:id", usageController.deleteUsage);
 
-// Notifications
 apiRouter.get("/notifications", notificationController.getMyNotifications);
 apiRouter.patch("/notifications/:id/read", notificationController.markAsRead);
 apiRouter.post("/notifications/clear", notificationController.clearAll);
+
+apiRouter.get("/inventory-items", inventoryItemController.getInventoryItems);
+apiRouter.post("/inventory-items", inventoryItemController.createInventoryItem);
+apiRouter.put(
+  "/inventory-items/:id",
+  inventoryItemController.updateInventoryItem,
+);
+apiRouter.patch(
+  "/inventory-items/:id/archive",
+  inventoryItemController.toggleArchiveInventoryItem,
+);
 
 app.use("/api/v1", apiRouter);
 

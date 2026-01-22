@@ -4,8 +4,7 @@ import {
   RequestRecord,
   UsageRecord,
   RequestStatus,
-  PartType,
-  NotificationItem,
+  InventoryItem,
 } from "../types";
 
 export const db = {
@@ -24,13 +23,34 @@ export const db = {
     },
   },
 
+  inventory: {
+    select: async (): Promise<InventoryItem[]> => {
+      return api.get("/inventory-items");
+    },
+    insert: async (data: {
+      name: string;
+      description?: string;
+    }): Promise<void> => {
+      await api.post("/inventory-items", data);
+    },
+    update: async (
+      id: string,
+      data: { name: string; description?: string },
+    ): Promise<void> => {
+      await api.put(`/inventory-items/${id}`, data);
+    },
+    toggleArchive: async (id: string): Promise<void> => {
+      await api.patch(`/inventory-items/${id}/archive`, {});
+    },
+  },
+
   requests: {
     select: async (): Promise<RequestRecord[]> => {
       return api.get("/requests");
     },
     insert: async (
       requesterId: string,
-      items: { type: PartType; quantity: number }[],
+      items: { inventoryItemId: string; quantity: number }[],
     ): Promise<void> => {
       await api.post("/requests", { requesterId, items });
     },
@@ -49,24 +69,25 @@ export const db = {
     insert: async (usage: Partial<UsageRecord>): Promise<void> => {
       await api.post("/usages", usage);
     },
-    update: async (usage: UsageRecord): Promise<void> => {
+    update: async (usage: Partial<UsageRecord>): Promise<void> => {
       await api.put(`/usages/${usage.id}`, {
         shopName: usage.shopName,
-        partType: usage.partType,
+        inventoryItemId: usage.inventoryItemId,
       });
     },
     delete: async (id: string): Promise<void> => {
       await api.delete(`/usages/${id}`);
     },
   },
+
   notifications: {
-    select: async (): Promise<NotificationItem[]> => {
+    select: async () => {
       return api.get("/notifications");
     },
-    markRead: async (id: string): Promise<void> => {
+    markRead: async (id: string) => {
       return api.patch(`/notifications/${id}/read`, {});
     },
-    clearAll: async (): Promise<void> => {
+    clearAll: async () => {
       return api.post("/notifications/clear", {});
     },
   },

@@ -1,9 +1,3 @@
-export type PartType =
-  | "Remax Charger"
-  | "Charging Cable"
-  | "Micro Cable"
-  | "Battery";
-
 export enum RequestStatus {
   PENDING = "PENDING",
   APPROVED = "APPROVED",
@@ -11,8 +5,17 @@ export enum RequestStatus {
   RECEIVED = "RECEIVED",
 }
 
+export interface InventoryItem {
+  id: string;
+  name: string;
+  description?: string;
+  isArchived: boolean;
+}
+
 export interface SpareItem {
-  type: PartType;
+  id?: string;
+  inventoryItemId: string;
+  type: string;
   quantity: number;
 }
 
@@ -20,14 +23,15 @@ export interface User {
   id: string;
   name: string;
   role: "admin" | "manager" | "sales";
-  avatarColor: string;
-  password: string;
+  avatarColor?: string;
+  password?: string;
+  createdAt?: string | number;
 }
 
 export interface RequestRecord {
   id: string;
   requesterId: string;
-  requesterName: string;
+  requesterName?: string;
   items: SpareItem[];
   status: RequestStatus;
   createdAt: number;
@@ -37,10 +41,11 @@ export interface RequestRecord {
 export interface UsageRecord {
   id: string;
   shopName: string;
-  partType: PartType;
+  inventoryItemId: string;
+  partType: string;
   usedAt: number;
   salespersonId: string;
-  salespersonName: string;
+  salespersonName?: string;
   voucherImage?: string;
 }
 
@@ -51,30 +56,6 @@ export interface NotificationItem {
   isRead: boolean;
   createdAt: string;
 }
-
-export const SPARE_PARTS: PartType[] = [
-  "Remax Charger",
-  "Charging Cable",
-  "Micro Cable",
-  "Battery",
-];
-
-export const INITIAL_USERS: User[] = [
-  {
-    id: "admin-1",
-    name: "Admin",
-    role: "admin",
-    avatarColor: "bg-indigo-600",
-    password: "admin",
-  },
-  {
-    id: "sales-1",
-    name: "Kyaw Kyaw",
-    role: "sales",
-    avatarColor: "bg-emerald-600",
-    password: "sales",
-  },
-];
 
 export const AVATAR_COLORS = [
   "bg-indigo-600",

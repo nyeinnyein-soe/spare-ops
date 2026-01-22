@@ -4,6 +4,7 @@ import prisma from "../db";
 export const getUsages = async (req: Request, res: Response) => {
   try {
     const usages = await prisma.usage.findMany({
+      include: { inventoryItem: true },
       orderBy: { usedAt: "desc" },
     });
 
@@ -15,6 +16,8 @@ export const getUsages = async (req: Request, res: Response) => {
         return {
           ...u,
           salespersonName: user?.name || "Unknown",
+          partType: u.inventoryItem.name,
+          inventoryItemId: u.inventoryItemId,
           usedAt: u.usedAt.getTime(),
         };
       }),
@@ -28,13 +31,27 @@ export const getUsages = async (req: Request, res: Response) => {
 
 export const createUsage = async (req: Request, res: Response) => {
   try {
-    const { shopName, partType, salespersonId, voucherImage } = req.body;
+    const { shopName, inventoryItemId, salespersonId, voucherImage } = req.body;
     await prisma.usage.create({
-      data: { shopName, partType, salespersonId, voucherImage },
+      data: { shopName, inventoryItemId, salespersonId, voucherImage },
     });
     res.status(201).json({ message: "Usage logged" });
   } catch (error) {
     res.status(500).json({ error: "Failed to log usage" });
+  }
+};
+
+export const updateUsage = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { shopName, inventoryItemId } = req.body;
+    await prisma.usage.update({
+      where: { id },
+      data: { shopName, inventoryItemId },
+    });
+    res.json({ message: "Usage updated" });
+  } catch (error) {
+    res.status(500).json({ error: "Update failed" });
   }
 };
 
@@ -44,19 +61,5 @@ export const deleteUsage = async (req: Request, res: Response) => {
     res.json({ message: "Usage deleted" });
   } catch (error) {
     res.status(500).json({ error: "Delete failed" });
-  }
-};
-
-export const updateUsage = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { shopName, partType } = req.body;
-    await prisma.usage.update({
-      where: { id },
-      data: { shopName, partType },
-    });
-    res.json({ message: "Usage updated" });
-  } catch (error) {
-    res.status(500).json({ error: "Update failed" });
   }
 };

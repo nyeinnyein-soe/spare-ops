@@ -5,7 +5,11 @@ import { sendNotification } from "./notificationController";
 export const getRequests = async (req: Request, res: Response) => {
   try {
     const requests = await prisma.request.findMany({
-      include: { items: true },
+      include: {
+        items: {
+          include: { inventoryItem: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -17,15 +21,20 @@ export const getRequests = async (req: Request, res: Response) => {
         return {
           ...r,
           requesterName: user?.name || "Unknown",
-          createdAt: r.createdAt.getTime(), // Frontend uses number timestamps
+          createdAt: r.createdAt.getTime(),
           approvedAt: r.approvedAt?.getTime(),
+          items: r.items.map((i) => ({
+            id: i.id,
+            quantity: i.quantity,
+            type: i.inventoryItem.name,
+            inventoryItemId: i.inventoryItemId,
+          })),
         };
       }),
     );
 
     res.json(enrichedRequests);
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: "Failed to fetch requests" });
   }
 };
@@ -43,10 +52,10 @@ export const createRequest = async (req: Request, res: Response) => {
       },
     });
 
-    // triger notification
     const managers = await prisma.user.findMany({
       where: { role: { in: ["admin", "manager"] } },
     });
+
     const requester = await prisma.user.findUnique({
       where: { id: requesterId },
     });
@@ -75,11 +84,6 @@ export const updateStatus = async (req: Request, res: Response) => {
       data.approvedAt = new Date();
     }
 
-    await prisma.request.update({
-      where: { id },
-      data,
-    });
-
     const updatedRequest = await prisma.request.update({
       where: { id },
       data,
@@ -87,7 +91,6 @@ export const updateStatus = async (req: Request, res: Response) => {
     });
 
     if (status === "RECEIVED") {
-      // notify to admin/manager if collected
       const managers = await prisma.user.findMany({
         where: { role: { in: ["admin", "manager"] } },
       });
@@ -100,7 +103,6 @@ export const updateStatus = async (req: Request, res: Response) => {
         );
       }
     } else {
-      // notify to himself if approved or rejected
       await sendNotification(
         updatedRequest.requesterId,
         `Request ${status}`,

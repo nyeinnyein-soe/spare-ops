@@ -11,6 +11,7 @@ import Staff from "./pages/Staff";
 import Reports from "./pages/Reports";
 import NewRequest from "./pages/NewRequest";
 import Insights from "./pages/Insights";
+import InventoryItems from "./pages/InventoryItems"; // <--- 1. IMPORT THIS
 
 export default function App() {
   return (
@@ -29,9 +30,10 @@ export default function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/new-request" element={<NewRequest />} />
               <Route path="/insights" element={<Insights />} />
+
+              <Route path="/inventory-items" element={<InventoryItems />} />
             </Route>
 
-            {/* Catch all */}
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </DataProvider>
