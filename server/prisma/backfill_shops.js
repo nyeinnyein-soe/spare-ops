@@ -7,12 +7,13 @@ async function main() {
     console.log('Starting backfill (JS)...');
 
     // 1. Find all usages with shopName but no shopId
-    const usagesToBackfill = await prisma.usage.findMany({
-        where: {
-            shopId: null,
-            shopName: { not: null },
-        },
-    });
+    // 1. Find all usages with shopName but no shopId
+    // note: using queryRaw because shopName might be removed from schema
+    const usagesToBackfill = await prisma.$queryRaw`
+        SELECT * FROM "usages" 
+        WHERE "shopName" IS NOT NULL 
+        AND ("shopId" IS NULL OR "shopId" = '')
+    `;
 
     if (usagesToBackfill.length === 0) {
         console.log('No usages to backfill.');
