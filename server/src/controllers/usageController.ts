@@ -4,7 +4,7 @@ import prisma from "../db";
 export const getUsages = async (req: Request, res: Response) => {
   try {
     const usages = await prisma.usage.findMany({
-      include: { inventoryItem: true },
+      include: { inventoryItem: true, shop: true },
       orderBy: { usedAt: "desc" },
     });
 
@@ -18,6 +18,8 @@ export const getUsages = async (req: Request, res: Response) => {
           salespersonName: user?.name || "Unknown",
           partType: u.inventoryItem.name,
           inventoryItemId: u.inventoryItemId,
+          shopName: u.shop?.name || "Unknown Shop", // Map Shop relation to display name
+          shopId: u.shopId,
           usedAt: u.usedAt.getTime(),
         };
       }),
@@ -31,9 +33,9 @@ export const getUsages = async (req: Request, res: Response) => {
 
 export const createUsage = async (req: Request, res: Response) => {
   try {
-    const { shopName, inventoryItemId, salespersonId, voucherImage } = req.body;
+    const { shopId, inventoryItemId, salespersonId, voucherImage } = req.body;
     await prisma.usage.create({
-      data: { shopName, inventoryItemId, salespersonId, voucherImage },
+      data: { shopId, inventoryItemId, salespersonId, voucherImage },
     });
     res.status(201).json({ message: "Usage logged" });
   } catch (error) {
@@ -44,10 +46,10 @@ export const createUsage = async (req: Request, res: Response) => {
 export const updateUsage = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { shopName, inventoryItemId } = req.body;
+    const { shopId, inventoryItemId } = req.body;
     await prisma.usage.update({
       where: { id },
-      data: { shopName, inventoryItemId },
+      data: { shopId, inventoryItemId },
     });
     res.json({ message: "Usage updated" });
   } catch (error) {

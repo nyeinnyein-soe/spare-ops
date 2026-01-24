@@ -5,6 +5,8 @@ import {
   UsageRecord,
   RequestStatus,
   InventoryItem,
+  Merchant,
+  Shop,
 } from "../types";
 
 export const db = {
@@ -20,6 +22,36 @@ export const db = {
     },
     delete: async (id: string): Promise<void> => {
       await api.delete(`/users/${id}`);
+    },
+  },
+
+  merchants: {
+    select: async (): Promise<Merchant[]> => {
+      return api.get("/merchants");
+    },
+    insert: async (data: Partial<Merchant>): Promise<void> => {
+      await api.post("/merchants", data);
+    },
+    update: async (id: string, data: Partial<Merchant>): Promise<void> => {
+      await api.put(`/merchants/${id}`, data);
+    },
+    delete: async (id: string): Promise<void> => {
+      await api.delete(`/merchants/${id}`);
+    },
+  },
+
+  shops: {
+    select: async (): Promise<Shop[]> => {
+      return api.get("/shops");
+    },
+    insert: async (data: Partial<Shop>): Promise<void> => {
+      await api.post("/shops", data);
+    },
+    update: async (id: string, data: Partial<Shop>): Promise<void> => {
+      await api.put(`/shops/${id}`, data);
+    },
+    delete: async (id: string): Promise<void> => {
+      await api.delete(`/shops/${id}`);
     },
   },
 
@@ -72,6 +104,7 @@ export const db = {
     update: async (usage: Partial<UsageRecord>): Promise<void> => {
       await api.put(`/usages/${usage.id}`, {
         shopName: usage.shopName,
+        shopId: usage.shopId,
         inventoryItemId: usage.inventoryItemId,
       });
     },

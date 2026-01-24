@@ -40,13 +40,29 @@ export interface RequestRecord {
 
 export interface UsageRecord {
   id: string;
-  shopName: string;
+  shopName: string; // Legacy display
+  shopId?: string; // New ID
   inventoryItemId: string;
   partType: string;
   usedAt: number;
   salespersonId: string;
   salespersonName?: string;
   voucherImage?: string;
+}
+
+export interface Shop {
+  id: string;
+  code: string;
+  name: string;
+  merchantId: string;
+  merchant?: Merchant;
+}
+
+export interface Merchant {
+  id: string;
+  code: string;
+  name: string;
+  shops?: Shop[];
 }
 
 export interface NotificationItem {

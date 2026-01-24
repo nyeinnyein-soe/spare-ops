@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   User as UserIcon,
   Bell,
+  Building,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useData } from "../contexts/DataContext";
@@ -68,11 +69,10 @@ export default function MainLayout() {
     return (
       <button
         onClick={() => navigate(path)}
-        className={`flex items-center gap-3 px-3 py-3 rounded-2xl transition-all ${
-          isActive
-            ? "bg-indigo-600 text-white shadow-xl shadow-indigo-100"
-            : "text-slate-600 hover:bg-slate-100"
-        }`}
+        className={`flex items-center gap-3 px-3 py-3 rounded-2xl transition-all ${isActive
+          ? "bg-indigo-600 text-white shadow-xl shadow-indigo-100"
+          : "text-slate-600 hover:bg-slate-100"
+          }`}
       >
         {icon}
         <span className="font-bold text-sm tracking-tight">{label}</span>
@@ -130,6 +130,11 @@ export default function MainLayout() {
               path="/reports"
               icon={<FileText size={20} />}
               label="Audit Reports"
+            />
+            <NavItem
+              path="/merchants"
+              icon={<Building size={20} />}
+              label="Merchants"
             />
           </>
         )}

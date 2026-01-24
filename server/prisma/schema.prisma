@@ -72,13 +72,14 @@ model RequestItem {
 
 model Usage {
   id              String        @id @default(uuid())
-  shopName        String
+  shopId          String // Required now
   inventoryItemId String
   usedAt          DateTime      @default(now())
   salespersonId   String
   voucherImage    String?
   salesperson     User          @relation(fields: [salespersonId], references: [id])
   inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  shop            Shop          @relation(fields: [shopId], references: [id])
 
   @@map("usages")
 }
@@ -93,4 +94,28 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
+}
+
+model Merchant {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  shops     Shop[]
+
+  @@map("merchants")
+}
+
+model Shop {
+  id         String   @id @default(uuid())
+  code       String   @unique
+  name       String
+  merchantId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+  usages     Usage[]
+
+  @@map("shops")
 }

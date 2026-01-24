@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import {
   Package,
   ArrowRightLeft,
@@ -7,7 +7,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { db } from "../services/dbService";
-import { RequestStatus } from "../types";
+import { RequestStatus, Shop } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function SalesDashboardView({
@@ -20,7 +20,13 @@ export default function SalesDashboardView({
     (r: any) => r.status === RequestStatus.APPROVED,
   );
 
-  const [shop, setShop] = useState("");
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState("");
+
+  useEffect(() => {
+    // Fetch shops for dropdown
+    db.shops.select().then(setShops).catch(console.error);
+  }, []);
   // Store the ID of the selected part, not the name
   const [selectedItemId, setSelectedItemId] = useState("");
   const [img, setImg] = useState<string | null>(null);
@@ -82,13 +88,13 @@ export default function SalesDashboardView({
 
     // --- 2. SEND CORRECT PAYLOAD ---
     await db.usages.insert({
-      shopName: shop,
+      shopId: selectedShopId,
       inventoryItemId: selectedItemId, // Send the UUID
       salespersonId: currentUser!.id,
       voucherImage: img || undefined,
     });
 
-    setShop("");
+    setSelectedShopId("");
     setSelectedItemId("");
     setImg(null);
     onRefresh();
@@ -189,12 +195,18 @@ export default function SalesDashboardView({
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">
                 Customer / Shop Name
               </label>
-              <input
-                value={shop}
-                onChange={(e) => setShop(e.target.value)}
-                placeholder="Where did this go?"
+              <select
+                value={selectedShopId}
+                onChange={(e) => setSelectedShopId(e.target.value)}
                 className="w-full p-4 border rounded-2xl outline-none focus:border-indigo-500 shadow-sm"
-              />
+              >
+                <option value="">Select Shop...</option>
+                {shops.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.code})
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-1.5">
@@ -232,7 +244,7 @@ export default function SalesDashboardView({
               </div>
             </div>
             <button
-              disabled={!shop || !selectedItemId}
+              disabled={!selectedShopId || !selectedItemId}
               onClick={handleLogUsage}
               className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black shadow-xl disabled:opacity-20 active:scale-95 transition-all text-lg"
             >
