@@ -14,6 +14,9 @@ import Insights from "./pages/Insights";
 import InventoryItems from "./pages/InventoryItems";
 import Merchants from "./pages/Merchants";
 
+import ProtectedRoute from "./components/ProtectedRoute";
+import NotFound from "./pages/NotFound";
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -25,18 +28,33 @@ export default function App() {
 
             {/* Protected Application Routes */}
             <Route element={<MainLayout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/history" element={<History />} />
-              <Route path="/staff" element={<Staff />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/new-request" element={<NewRequest />} />
-              <Route path="/insights" element={<Insights />} />
+              {/* Common Routes */}
+              <Route element={<ProtectedRoute allowedRoles={["admin", "manager", "sales"]} />}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/history" element={<History />} />
+              </Route>
 
-              <Route path="/inventory-items" element={<InventoryItems />} />
-              <Route path="/merchants" element={<Merchants />} />
+              {/* Sales Only */}
+              <Route element={<ProtectedRoute allowedRoles={["sales"]} />}>
+                <Route path="/new-request" element={<NewRequest />} />
+              </Route>
+
+              {/* Admin & Manager Only */}
+              <Route element={<ProtectedRoute allowedRoles={["admin", "manager"]} />}>
+                <Route path="/staff" element={<Staff />} />
+                <Route path="/reports" element={<Reports />} />
+                <Route path="/inventory-items" element={<InventoryItems />} />
+                <Route path="/merchants" element={<Merchants />} />
+              </Route>
+
+              {/* Admin Only */}
+              <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+                <Route path="/insights" element={<Insights />} />
+              </Route>
             </Route>
 
-            <Route path="*" element={<Navigate to="/" />} />
+            <Route path="/404" element={<NotFound />} />
+            <Route path="*" element={<Navigate to="/404" />} />
           </Routes>
         </DataProvider>
       </AuthProvider>
