@@ -9,6 +9,7 @@ import {
 import { db } from "../services/dbService";
 import { RequestStatus, Shop } from "../types";
 import { useAuth } from "../contexts/AuthContext";
+import SearchableSelect from "./SearchableSelect";
 
 export default function SalesDashboardView({
   requests,
@@ -27,6 +28,15 @@ export default function SalesDashboardView({
     // Fetch shops for dropdown
     db.shops.select().then(setShops).catch(console.error);
   }, []);
+
+  const shopOptions = useMemo(() => {
+    return shops.map(s => ({
+      value: s.id,
+      label: s.name,
+      sublabel: `Code: ${s.code}`
+    }));
+  }, [shops]);
+
   // Store the ID of the selected part, not the name
   const [selectedItemId, setSelectedItemId] = useState("");
   const [img, setImg] = useState<string | null>(null);
@@ -74,8 +84,17 @@ export default function SalesDashboardView({
       }));
   }, [requests, usages, currentUser]);
 
+  const spareOptions = useMemo(() => {
+    return onHand.map(i => ({
+      value: i.id,
+      label: i.name,
+      sublabel: `On Hand: ${i.quantity}`
+    }));
+  }, [onHand]);
+
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => setImg(reader.result as string);
@@ -195,18 +214,13 @@ export default function SalesDashboardView({
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">
                 Customer / Shop Name
               </label>
-              <select
+              <SearchableSelect
+                options={shopOptions}
                 value={selectedShopId}
-                onChange={(e) => setSelectedShopId(e.target.value)}
-                className="w-full p-4 border rounded-2xl outline-none focus:border-indigo-500 shadow-sm"
-              >
-                <option value="">Select Shop...</option>
-                {shops.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.code})
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedShopId}
+                placeholder="Search for a shop..."
+                emptyMessage="No shops found."
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -214,18 +228,15 @@ export default function SalesDashboardView({
                 Equipment Used
               </label>
               <div className="flex gap-4">
-                <select
-                  value={selectedItemId}
-                  onChange={(e) => setSelectedItemId(e.target.value)}
-                  className="flex-1 p-4 border rounded-2xl outline-none shadow-sm"
-                >
-                  <option value="">Select Spare...</option>
-                  {onHand.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex-1">
+                  <SearchableSelect
+                    options={spareOptions}
+                    value={selectedItemId}
+                    onChange={setSelectedItemId}
+                    placeholder="Select Spare..."
+                    emptyMessage="None on hand."
+                  />
+                </div>
                 <button
                   onClick={() => fileInput.current?.click()}
                   className={`px-5 py-4 rounded-2xl border-2 border-dashed flex items-center gap-2 font-black text-xs transition-all ${img ? "bg-emerald-50 border-emerald-500 text-emerald-700" : "border-slate-300 text-slate-400 hover:border-indigo-500 hover:text-indigo-600"}`}
@@ -243,6 +254,7 @@ export default function SalesDashboardView({
                 />
               </div>
             </div>
+
             <button
               disabled={!selectedShopId || !selectedItemId}
               onClick={handleLogUsage}
