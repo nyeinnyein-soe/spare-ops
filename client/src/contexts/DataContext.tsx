@@ -8,6 +8,8 @@ import {
 } from "../types";
 import { db } from "../services/dbService";
 import { useAuth } from "./AuthContext";
+import { ToastType } from "../components/Toast";
+
 
 interface DataContextType {
   users: User[];
@@ -19,8 +21,8 @@ interface DataContextType {
   refreshData: () => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   clearNotifications: () => Promise<void>;
-  showToast: (msg: string) => void;
-  toast: { msg: string; show: boolean };
+  showToast: (msg: string, type?: ToastType) => void;
+  toast: { msg: string; show: boolean; type: ToastType };
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -33,14 +35,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [usages, setUsages] = useState<UsageRecord[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+
   const [loading, setLoading] = useState(false);
 
-  const [toast, setToast] = useState({ msg: "", show: false });
+  // Use ref to track state inside interval closure
+  const notificationsRef = React.useRef<NotificationItem[]>([]);
 
-  const showToast = (msg: string) => {
-    setToast({ msg, show: true });
-    setTimeout(() => setToast({ msg: "", show: false }), 3000);
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
+
+  const [toast, setToast] = useState<{ msg: string; show: boolean; type: ToastType }>({
+    msg: "",
+    show: false,
+    type: "info",
+  });
+
+  const showToast = (msg: string, type: ToastType = "info") => {
+    setToast({ msg, show: true, type });
+    setTimeout(() => setToast((prev) => ({ ...prev, show: false })), 3000);
   };
+
 
   const syncData = async (isBackground = false) => {
     if (!localStorage.getItem("spareops_token")) return;
@@ -61,7 +76,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setInventoryItems(inv || []);
 
       if (isBackground) {
-        const oldUnread = notifications.filter((x) => !x.isRead).length;
+        // Use ref to get the TRUE current state, not the closure's stale state
+        const oldUnread = notificationsRef.current.filter((x) => !x.isRead).length;
         const newUnread = (n || []).filter((x) => !x.isRead).length;
 
         if (newUnread > oldUnread) {

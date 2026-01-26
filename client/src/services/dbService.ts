@@ -38,7 +38,11 @@ export const db = {
     delete: async (id: string): Promise<void> => {
       await api.delete(`/merchants/${id}`);
     },
+    bulkInsert: async (data: any[]): Promise<void> => {
+      await api.post("/merchants/bulk", data);
+    },
   },
+
 
   shops: {
     select: async (): Promise<Shop[]> => {

@@ -68,6 +68,12 @@ apiRouter.delete(
   verifyRole(["admin", "manager"]),
   merchantController.deleteMerchant
 );
+apiRouter.post(
+  "/merchants/bulk",
+  verifyRole(["admin", "manager"]),
+  merchantController.bulkImportMerchants
+);
+
 
 // Shop Routes (Admin/Manager only, but GET may be open for Sales dropdown if needed? Plan said Admin/Manager manage it. Sales needs to SEE it)
 // Sales needs to List shops to deploy items. So GET /shops might need to be open to sales too?

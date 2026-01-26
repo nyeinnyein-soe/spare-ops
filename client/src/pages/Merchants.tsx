@@ -1,11 +1,16 @@
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, Building, ShoppingBag } from "lucide-react";
+import { Plus, Edit2, Trash2, Building, ShoppingBag, FileSpreadsheet, Loader2 } from "lucide-react";
 import { db } from "../services/dbService";
 import { Merchant, Shop } from "../types";
+import { useData } from "../contexts/DataContext";
+import ExcelJS from "exceljs";
+
 
 export default function Merchants() {
     const [merchants, setMerchants] = useState<Merchant[]>([]);
     const [loading, setLoading] = useState(true);
+    const { showToast } = useData();
+
 
     // Merchant Form State
     const [showMerchantModal, setShowMerchantModal] = useState(false);
@@ -17,6 +22,8 @@ export default function Merchants() {
     const [editingShop, setEditingShop] = useState<Shop | null>(null);
     const [selectedMerchantId, setSelectedMerchantId] = useState<string | null>(null);
     const [shopForm, setShopForm] = useState({ code: "", name: "" });
+
+    const [importLoading, setImportLoading] = useState(false);
 
     useEffect(() => {
         fetchMerchants();
@@ -42,21 +49,25 @@ export default function Merchants() {
                 await db.merchants.insert(merchantForm);
             }
             setShowMerchantModal(false);
+            showToast(editingMerchant ? "Merchant updated successfully" : "Merchant created successfully", "success");
             fetchMerchants();
         } catch (error) {
-            alert("Failed to save merchant");
+            showToast("Failed to save merchant", "error");
         }
     };
+
 
     const handleDeleteMerchant = async (id: string) => {
         if (!confirm("Are you sure? This will delete all shops associated with this merchant.")) return;
         try {
             await db.merchants.delete(id);
+            showToast("Merchant deleted", "success");
             fetchMerchants();
         } catch (error) {
-            alert("Failed to delete merchant");
+            showToast("Failed to delete merchant", "error");
         }
     };
+
 
     const handleSaveShop = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -69,21 +80,25 @@ export default function Merchants() {
                 await db.shops.insert({ ...shopForm, merchantId: selectedMerchantId });
             }
             setShowShopModal(false);
+            showToast(editingShop ? "Shop updated successfully" : "Shop created successfully", "success");
             fetchMerchants(); // Refresh to show nested shops
         } catch (error) {
-            alert("Failed to save shop");
+            showToast("Failed to save shop", "error");
         }
     };
+
 
     const handleDeleteShop = async (id: string) => {
         if (!confirm("Are you sure you want to delete this shop?")) return;
         try {
             await db.shops.delete(id);
+            showToast("Shop deleted", "success");
             fetchMerchants();
         } catch (error) {
-            alert("Failed to delete shop");
+            showToast("Failed to delete shop", "error");
         }
     };
+
 
     const openMerchantModal = (merchant?: Merchant) => {
         setEditingMerchant(merchant || null);
@@ -98,6 +113,109 @@ export default function Merchants() {
         setShowShopModal(true);
     };
 
+    const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setImportLoading(true);
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const buffer = await file.arrayBuffer();
+            await workbook.xlsx.load(buffer);
+
+            const allData: any[] = [];
+
+            workbook.eachSheet((sheet) => {
+                console.log(`Processing sheet: "${sheet.name}"`);
+                // 1. Find the header row (scan first 20 rows)
+                let headerRowLine = -1;
+                let merchantCodeIdx = -1;
+                let merchantNameIdx = -1;
+                let shopCodeIdx = -1;
+                let shopNameIdx = -1;
+
+                for (let r = 1; r <= Math.min(sheet.rowCount, 20); r++) {
+                    const row = sheet.getRow(r);
+                    let foundMerchantCode = false;
+
+                    row.eachCell((cell, colNumber) => {
+                        const val = cell.value?.toString().toLowerCase().trim();
+                        if (val === "merchant code") {
+                            merchantCodeIdx = colNumber;
+                            foundMerchantCode = true;
+                        }
+                        if (val === "merchant name") merchantNameIdx = colNumber;
+                        if (val === "shop code") shopCodeIdx = colNumber;
+                        if (val === "shop name") shopNameIdx = colNumber;
+                    });
+
+                    if (foundMerchantCode && merchantNameIdx !== -1 && shopCodeIdx !== -1 && shopNameIdx !== -1) {
+                        headerRowLine = r;
+                        break;
+                    }
+                }
+
+                if (headerRowLine === -1) {
+                    console.warn(`Sheet "${sheet.name}" missing required headers. Skipping.`);
+                    return;
+                }
+
+                console.log(`Found headers at row ${headerRowLine} in sheet "${sheet.name}"`);
+
+                // 2. Process data rows starting after the header
+                let rowsProcessed = 0;
+                for (let rowNum = headerRowLine + 1; rowNum <= sheet.rowCount; rowNum++) {
+                    const row = sheet.getRow(rowNum);
+
+                    const getVal = (idx: number) => {
+                        const cell = row.getCell(idx);
+                        if (!cell.value) return "";
+
+                        // Handle potential object types (e.g., formula or styled cell)
+                        if (typeof cell.value === 'object' && cell.value !== null) {
+                            if ('text' in cell.value) return cell.value.text?.toString().trim() || "";
+                            if ('result' in cell.value) return cell.value.result?.toString().trim() || "";
+                        }
+                        return cell.value.toString().trim();
+                    };
+
+                    const merchantCode = getVal(merchantCodeIdx);
+                    const merchantName = getVal(merchantNameIdx);
+                    const shopCode = getVal(shopCodeIdx);
+                    const shopName = getVal(shopNameIdx);
+
+                    if (merchantCode && merchantName && shopCode && shopName) {
+                        allData.push({ merchantCode, merchantName, shopCode, shopName });
+                        rowsProcessed++;
+                    }
+                }
+                console.log(`Added ${rowsProcessed} rows from sheet "${sheet.name}"`);
+            });
+
+            if (allData.length === 0) {
+                showToast("No valid data found in the Excel file", "error");
+                return;
+            }
+
+            await db.merchants.bulkInsert(allData);
+            showToast(`Successfully imported ${allData.length} records`, "success");
+            fetchMerchants();
+        } catch (error: any) {
+            console.error("Excel import failed", error);
+            const errorMsg = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+            if (errorMsg.includes("Invalid token")) {
+                showToast("Session expired. Please re-login", "error");
+            } else {
+                showToast(`Import failed: ${errorMsg}`, "error");
+            }
+        } finally {
+
+            setImportLoading(false);
+            e.target.value = ""; // Clear file input
+        }
+    };
+
+
     if (loading) return <div className="p-8">Loading...</div>;
 
     return (
@@ -107,13 +225,27 @@ export default function Merchants() {
                     <Building className="w-8 h-8 text-indigo-600" />
                     Merchants & Shops
                 </h1>
-                <button
-                    onClick={() => openMerchantModal()}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                >
-                    <Plus className="w-4 h-4" /> Add Merchant
-                </button>
+                <div className="flex gap-3">
+                    <label className={`flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer transition-all ${importLoading ? "opacity-50 pointer-events-none" : ""}`}>
+                        {importLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                        {importLoading ? "Importing..." : "Bulk Import Excel"}
+                        <input
+                            type="file"
+                            accept=".xlsx"
+                            className="hidden"
+                            onChange={handleExcelImport}
+                            disabled={importLoading}
+                        />
+                    </label>
+                    <button
+                        onClick={() => openMerchantModal()}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                    >
+                        <Plus className="w-4 h-4" /> Add Merchant
+                    </button>
+                </div>
             </div>
+
 
             <div className="grid gap-6">
                 {merchants.map((merchant) => (

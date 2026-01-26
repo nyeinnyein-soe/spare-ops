@@ -82,7 +82,8 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 relative">
-      <Toast message={toast.msg} show={toast.show} />
+      <Toast message={toast.msg} show={toast.show} type={toast.type} />
+
 
       <nav className="w-full md:w-64 bg-white border-r border-slate-200 p-4 flex flex-col gap-2 shadow-sm shrink-0 z-30">
         <div className="flex items-center gap-2 px-2 py-4 mb-4 border-b">
