@@ -1,16 +1,18 @@
-import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, Building, ShoppingBag, FileSpreadsheet, Loader2 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Edit2, Trash2, Building, ShoppingBag, FileSpreadsheet, Loader2, Search, ChevronDown, ChevronRight, FilterX } from "lucide-react";
 import { db } from "../services/dbService";
 import { Merchant, Shop } from "../types";
 import { useData } from "../contexts/DataContext";
 import ExcelJS from "exceljs";
-
 
 export default function Merchants() {
     const [merchants, setMerchants] = useState<Merchant[]>([]);
     const [loading, setLoading] = useState(true);
     const { showToast } = useData();
 
+    // UI state
+    const [searchQuery, setSearchQuery] = useState("");
+    const [expandedMerchants, setExpandedMerchants] = useState<Record<string, boolean>>({});
 
     // Merchant Form State
     const [showMerchantModal, setShowMerchantModal] = useState(false);
@@ -33,10 +35,54 @@ export default function Merchants() {
         try {
             const data = await db.merchants.select();
             setMerchants(data);
+
+            // Expand first merchant by default if exists
+            if (data.length > 0 && Object.keys(expandedMerchants).length === 0) {
+                setExpandedMerchants({ [data[0].id]: true });
+            }
         } catch (error) {
             console.error("Failed to fetch merchants", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Filtered Merchants based on Search Query
+    const filteredMerchants = useMemo(() => {
+        if (!searchQuery.trim()) return merchants;
+
+        const query = searchQuery.toLowerCase();
+        return merchants.map(merchant => {
+            const merchantNameMatch = merchant.name.toLowerCase().includes(query);
+            const merchantCodeMatch = String(merchant.code).toLowerCase().includes(query);
+            const merchantMatch = merchantNameMatch || merchantCodeMatch;
+
+            const matchingShops = (merchant.shops || []).filter(shop =>
+                shop.name.toLowerCase().includes(query) ||
+                String(shop.code).toLowerCase().includes(query)
+            );
+
+            if (merchantMatch || matchingShops.length > 0) {
+                return {
+                    ...merchant,
+                    // Show only matching shops if some shops match, otherwise show all if merchant name/code matches
+                    shops: matchingShops.length > 0 ? matchingShops : merchant.shops
+                };
+            }
+            return null;
+        }).filter(Boolean) as Merchant[];
+    }, [merchants, searchQuery]);
+
+    const toggleMerchant = (id: string) => {
+        setExpandedMerchants(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    const toggleAll = (expand: boolean) => {
+        if (expand) {
+            const all = filteredMerchants.reduce((acc, m) => ({ ...acc, [m.id]: true }), {});
+            setExpandedMerchants(all);
+        } else {
+            setExpandedMerchants({});
         }
     };
 
@@ -56,7 +102,6 @@ export default function Merchants() {
         }
     };
 
-
     const handleDeleteMerchant = async (id: string) => {
         if (!confirm("Are you sure? This will delete all shops associated with this merchant.")) return;
         try {
@@ -67,7 +112,6 @@ export default function Merchants() {
             showToast("Failed to delete merchant", "error");
         }
     };
-
 
     const handleSaveShop = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -87,7 +131,6 @@ export default function Merchants() {
         }
     };
 
-
     const handleDeleteShop = async (id: string) => {
         if (!confirm("Are you sure you want to delete this shop?")) return;
         try {
@@ -98,7 +141,6 @@ export default function Merchants() {
             showToast("Failed to delete shop", "error");
         }
     };
-
 
     const openMerchantModal = (merchant?: Merchant) => {
         setEditingMerchant(merchant || null);
@@ -209,7 +251,6 @@ export default function Merchants() {
                 showToast(`Import failed: ${errorMsg}`, "error");
             }
         } finally {
-
             setImportLoading(false);
             e.target.value = ""; // Clear file input
         }
@@ -219,121 +260,192 @@ export default function Merchants() {
     if (loading) return <div className="p-8">Loading...</div>;
 
     return (
-        <div className="space-y-6 p-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                    <Building className="w-8 h-8 text-indigo-600" />
-                    Merchants & Shops
-                </h1>
-                <div className="flex gap-3">
-                    <label className={`flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer transition-all ${importLoading ? "opacity-50 pointer-events-none" : ""}`}>
-                        {importLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-                        {importLoading ? "Importing..." : "Bulk Import Excel"}
+        <div className="space-y-6 p-6 pb-24">
+            {/* Sticky Header Section */}
+            <div className="sticky top-0 z-20 -mx-6 px-6 py-4 bg-slate-50 border-b border-slate-200">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <h1 className="text-2xl font-black tracking-tight flex items-center gap-2 text-slate-900">
+                        <Building className="w-8 h-8 text-indigo-600" />
+                        Merchants & Shops
+                    </h1>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <label className={`flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold text-sm rounded-xl hover:bg-emerald-700 cursor-pointer shadow-lg shadow-emerald-100 transition-all ${importLoading ? "opacity-50 pointer-events-none" : ""}`}>
+                            {importLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                            {importLoading ? "Importing..." : "Bulk Import"}
+                            <input
+                                type="file"
+                                accept=".xlsx"
+                                className="hidden"
+                                onChange={handleExcelImport}
+                                disabled={importLoading}
+                            />
+                        </label>
+                        <button
+                            onClick={() => openMerchantModal()}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+                        >
+                            <Plus className="w-4 h-4" /> Add Merchant
+                        </button>
+                    </div>
+                </div>
+
+                {/* Sub-Header with Search and Controls */}
+                <div className="flex flex-col sm:flex-row items-center gap-4 mt-6">
+                    <div className="relative flex-1 flex items-center group bg-white border border-slate-200 rounded-2xl shadow-sm focus-within:ring-4 focus-within:ring-indigo-500/10 focus-within:border-indigo-500 transition-all">
+                        <div className="pl-4 pr-2 text-slate-400 group-focus-within:text-indigo-600 transition-colors pointer-events-none">
+                            <Search size={20} />
+                        </div>
                         <input
-                            type="file"
-                            accept=".xlsx"
-                            className="hidden"
-                            onChange={handleExcelImport}
-                            disabled={importLoading}
+                            type="text"
+                            placeholder="Find merchants or shops (name or code)..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="flex-1 py-3 bg-transparent border-none text-sm font-medium focus:outline-none placeholder:text-slate-400"
                         />
-                    </label>
-                    <button
-                        onClick={() => openMerchantModal()}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                    >
-                        <Plus className="w-4 h-4" /> Add Merchant
-                    </button>
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery("")}
+                                className="pr-4 text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                                <X size={18} />
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="flex gap-2 shrink-0">
+                        <button
+                            onClick={() => toggleAll(true)}
+                            className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
+                        >
+                            Expand All
+                        </button>
+                        <button
+                            onClick={() => toggleAll(false)}
+                            className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
+                        >
+                            Collapse All
+                        </button>
+                    </div>
                 </div>
             </div>
 
-
-            <div className="grid gap-6">
-                {merchants.map((merchant) => (
-                    <div key={merchant.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 className="text-lg font-semibold text-gray-900">{merchant.name}</h3>
-                                <p className="text-sm text-gray-500">Code: {merchant.code}</p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => openMerchantModal(merchant)} className="p-2 text-gray-400 hover:text-indigo-600">
-                                    <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button onClick={() => handleDeleteMerchant(merchant.id)} className="p-2 text-gray-400 hover:text-red-600">
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="pl-4 border-l-2 border-gray-100 ml-2 space-y-3">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-sm font-medium text-gray-500 flex items-center gap-2">
-                                    <ShoppingBag className="w-4 h-4" /> Associated Shops
-                                </span>
-                                <button
-                                    onClick={() => openShopModal(merchant.id)}
-                                    className="text-xs flex items-center gap-1 text-indigo-600 hover:text-indigo-700"
-                                >
-                                    <Plus className="w-3 h-3" /> Add Shop
-                                </button>
-                            </div>
-
-                            {merchant.shops && merchant.shops.length > 0 ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {merchant.shops.map((shop) => (
-                                        <div key={shop.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                            <div className="text-sm">
-                                                <p className="font-medium text-gray-900">{shop.name}</p>
-                                                <p className="text-xs text-gray-500">{shop.code}</p>
-                                            </div>
-                                            <div className="flex gap-1">
-                                                <button onClick={() => openShopModal(merchant.id, shop)} className="p-1 text-gray-400 hover:text-indigo-600">
-                                                    <Edit2 className="w-3 h-3" />
-                                                </button>
-                                                <button onClick={() => handleDeleteShop(shop.id)} className="p-1 text-gray-400 hover:text-red-600">
-                                                    <Trash2 className="w-3 h-3" />
-                                                </button>
+            {filteredMerchants.length === 0 ? (
+                <div className="py-20 flex flex-col items-center justify-center text-slate-400 space-y-4 bg-white rounded-3xl border border-dashed border-slate-200">
+                    <FilterX size={48} className="opacity-20" />
+                    <p className="font-medium text-slate-500">No merchants found matching your search</p>
+                    <button onClick={() => setSearchQuery("")} className="text-sm font-bold text-indigo-600 hover:underline">Clear search filters</button>
+                </div>
+            ) : (
+                <div className="grid gap-6">
+                    {filteredMerchants.map((merchant) => (
+                        <div key={merchant.id} className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
+                            {/* Merchant Header / Toggle */}
+                            <div className="p-6">
+                                <div className="flex items-start justify-between">
+                                    <div
+                                        className="flex items-center gap-4 cursor-pointer group flex-1"
+                                        onClick={() => toggleMerchant(merchant.id)}
+                                    >
+                                        <div className={`p-3 rounded-2xl transition-colors ${expandedMerchants[merchant.id] ? "bg-indigo-600 text-white" : "bg-slate-50 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600"}`}>
+                                            {expandedMerchants[merchant.id] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-black tracking-tight text-slate-900 group-hover:text-indigo-600 transition-colors">{merchant.name}</h3>
+                                            <div className="flex items-center gap-3 mt-1">
+                                                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{merchant.code}</span>
+                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
+                                                <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-full">{merchant.shops?.length || 0} Associated Shops</span>
                                             </div>
                                         </div>
-                                    ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => openMerchantModal(merchant)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
+                                            <Edit2 size={18} />
+                                        </button>
+                                        <button onClick={() => handleDeleteMerchant(merchant.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
                                 </div>
-                            ) : (
-                                <p className="text-sm text-gray-400 italic">No shops added yet.</p>
+                            </div>
+
+                            {/* Expanded Content: Shops */}
+                            {expandedMerchants[merchant.id] && (
+                                <div className="px-6 pb-6 pt-2 border-t border-slate-50 bg-slate-50/10">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <ShoppingBag className="w-4 h-4" /> Shop List
+                                        </span>
+                                        <button
+                                            onClick={() => openShopModal(merchant.id)}
+                                            className="px-4 py-2 bg-white border border-slate-200 text-indigo-600 font-bold text-xs rounded-xl hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all flex items-center gap-2"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" /> Add New Shop
+                                        </button>
+                                    </div>
+
+                                    {merchant.shops && merchant.shops.length > 0 ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {merchant.shops.map((shop) => (
+                                                <div key={shop.id} className="relative group bg-white border border-slate-200 rounded-2xl p-4 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-500/5 transition-all">
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="overflow-hidden">
+                                                            <p className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">{shop.name}</p>
+                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{shop.code}</p>
+                                                        </div>
+                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => openShopModal(merchant.id, shop)} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg">
+                                                                <Edit2 size={14} />
+                                                            </button>
+                                                            <button onClick={() => handleDeleteShop(shop.id)} className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg">
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="py-10 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                                            <p className="text-sm font-medium text-slate-400 italic">No shops associated with this merchant yet.</p>
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
 
             {/* Merchant Modal */}
             {showMerchantModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl max-w-md w-full p-6">
-                        <h2 className="text-xl font-bold mb-4">{editingMerchant ? "Edit Merchant" : "New Merchant"}</h2>
-                        <form onSubmit={handleSaveMerchant} className="space-y-4">
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[32px] max-w-md w-full p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                        <h2 className="text-2xl font-black text-slate-900 mb-6">{editingMerchant ? "Edit Merchant" : "New Merchant"}</h2>
+                        <form onSubmit={handleSaveMerchant} className="space-y-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Merchant Code</label>
+                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Merchant Code</label>
                                 <input
                                     required
                                     value={merchantForm.code}
                                     onChange={(e) => setMerchantForm({ ...merchantForm, code: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-mono"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Merchant Name</label>
+                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Merchant Name</label>
                                 <input
                                     required
                                     value={merchantForm.name}
                                     onChange={(e) => setMerchantForm({ ...merchantForm, name: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all"
                                 />
                             </div>
-                            <div className="flex justify-end gap-3 mt-6">
-                                <button type="button" onClick={() => setShowMerchantModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg">
+                            <div className="flex justify-end gap-3 mt-8">
+                                <button type="button" onClick={() => setShowMerchantModal(false)} className="px-6 py-3 text-slate-600 font-bold text-sm hover:bg-slate-50 rounded-2xl transition-all">
                                     Cancel
                                 </button>
-                                <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                                <button type="submit" className="px-8 py-3 bg-indigo-600 text-white font-black text-sm rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all">
                                     Save Merchant
                                 </button>
                             </div>
@@ -344,33 +456,33 @@ export default function Merchants() {
 
             {/* Shop Modal */}
             {showShopModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl max-w-md w-full p-6">
-                        <h2 className="text-xl font-bold mb-4">{editingShop ? "Edit Shop" : "New Shop"}</h2>
-                        <form onSubmit={handleSaveShop} className="space-y-4">
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[32px] max-w-md w-full p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+                        <h2 className="text-2xl font-black text-slate-900 mb-6">{editingShop ? "Edit Shop" : "New Shop"}</h2>
+                        <form onSubmit={handleSaveShop} className="space-y-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Shop Code</label>
+                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Shop Code</label>
                                 <input
                                     required
                                     value={shopForm.code}
                                     onChange={(e) => setShopForm({ ...shopForm, code: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-mono"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Shop Name</label>
+                                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Shop Name</label>
                                 <input
                                     required
                                     value={shopForm.name}
                                     onChange={(e) => setShopForm({ ...shopForm, name: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all"
                                 />
                             </div>
-                            <div className="flex justify-end gap-3 mt-6">
-                                <button type="button" onClick={() => setShowShopModal(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg">
+                            <div className="flex justify-end gap-3 mt-8">
+                                <button type="button" onClick={() => setShowShopModal(false)} className="px-6 py-3 text-slate-600 font-bold text-sm hover:bg-slate-50 rounded-2xl transition-all">
                                     Cancel
                                 </button>
-                                <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                                <button type="submit" className="px-8 py-3 bg-indigo-600 text-white font-black text-sm rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all">
                                     Save Shop
                                 </button>
                             </div>
@@ -381,3 +493,10 @@ export default function Merchants() {
         </div>
     );
 }
+
+function X({ size }: { size: number }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+    );
+}
+
