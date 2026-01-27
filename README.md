@@ -120,6 +120,39 @@ Before starting, ensure you have the following installed on your machine:
 
 ---
 
+# PM2 Deployment Guide
+
+PM2 is a production process manager for Node.js applications, providing process monitoring, auto-restart, and system startup integration.
+
+## Install Dependencies (Globally)
+
+```bash
+npm install -g pm2
+npm install -g serve
+```
+
+## Server Setup
+```bash
+cd server
+npm run build
+pm2 start dist/index.js --name spareops-api --env production
+```
+
+## Client (Frontend) Setup
+```bash
+cd client
+npm run build
+pm2 start "serve -s dist -l 3000" --name spareops-client
+```
+
+## PM2 Startup (systemd)
+```bash
+pm2 save
+pm2 startup
+sudo reboot
+```
+
+
 ## Default Roles & Permissions
 
 *   **Admin:** Full access to Dashboard, History, Staff Directory (Create/Delete users), Audit Reports, and AI Insights.
