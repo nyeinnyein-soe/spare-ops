@@ -20,6 +20,7 @@ export const getUsages = async (req: Request, res: Response) => {
           inventoryItemId: u.inventoryItemId,
           shopName: u.shop?.name || "Unknown Shop", // Map Shop relation to display name
           shopId: u.shopId,
+          remarks: u.remarks,
           usedAt: u.usedAt.getTime(),
         };
       }),
@@ -33,9 +34,9 @@ export const getUsages = async (req: Request, res: Response) => {
 
 export const createUsage = async (req: Request, res: Response) => {
   try {
-    const { shopId, inventoryItemId, salespersonId, voucherImage } = req.body;
+    const { shopId, inventoryItemId, salespersonId, voucherImage, remarks } = req.body;
     await prisma.usage.create({
-      data: { shopId, inventoryItemId, salespersonId, voucherImage },
+      data: { shopId, inventoryItemId, salespersonId, voucherImage, remarks },
     });
     res.status(201).json({ message: "Usage logged" });
   } catch (error) {

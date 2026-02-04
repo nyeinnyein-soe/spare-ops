@@ -39,6 +39,7 @@ export default function SalesDashboardView({
 
   // Store the ID of the selected part, not the name
   const [selectedItemId, setSelectedItemId] = useState("");
+  const [remarks, setRemarks] = useState("");
   const [img, setImg] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -110,11 +111,13 @@ export default function SalesDashboardView({
       shopId: selectedShopId,
       inventoryItemId: selectedItemId, // Send the UUID
       salespersonId: currentUser!.id,
+      remarks: remarks || undefined,
       voucherImage: img || undefined,
     });
 
     setSelectedShopId("");
     setSelectedItemId("");
+    setRemarks("");
     setImg(null);
     onRefresh();
   };
@@ -253,6 +256,18 @@ export default function SalesDashboardView({
                   onChange={handleCapture}
                 />
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">
+                Remarks / Notes
+              </label>
+              <textarea
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                placeholder="Optional notes about this deployment..."
+                className="w-full p-5 border border-slate-200 rounded-2xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-slate-600 min-h-[100px] resize-none font-medium text-sm"
+              />
             </div>
 
             <button

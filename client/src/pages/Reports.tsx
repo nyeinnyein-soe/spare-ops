@@ -80,6 +80,7 @@ export default function Reports() {
         "Shop Name": u.shopName,
         "Item Type": u.partType,
         "Staff Name": u.salespersonName,
+        "Remarks": u.remarks || "-",
         "Voucher Attached": u.voucherImage ? "Yes" : "No",
       }));
       await exportToExcel(dataToExport, `Deployments_Report_${timestamp}`);
@@ -232,6 +233,7 @@ export default function Reports() {
                 {tab === "usage" ? "Shop" : "Requester"}
               </th>
               <th className="px-6 py-4">Item(s)</th>
+              {tab === "usage" && <th className="px-6 py-4">Remark</th>}
               <th className="px-6 py-4">Status / Staff</th>
               {currentUser?.role === "admin" && (
                 <th className="px-6 py-4 text-right">Actions</th>
@@ -241,85 +243,88 @@ export default function Reports() {
           <tbody className="divide-y text-sm">
             {tab === "usage"
               ? filteredUsages.map((u) => (
-                  <tr
-                    key={u.id}
-                    className="hover:bg-slate-50 group transition-colors"
-                  >
-                    <td className="px-6 py-4 text-slate-500">
-                      {new Date(u.usedAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div
-                        className="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform"
-                        onClick={() =>
-                          u.voucherImage && setViewImage(u.voucherImage)
-                        }
+                <tr
+                  key={u.id}
+                  className="hover:bg-slate-50 group transition-colors"
+                >
+                  <td className="px-6 py-4 text-slate-500">
+                    {new Date(u.usedAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div
+                      className="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform"
+                      onClick={() =>
+                        u.voucherImage && setViewImage(u.voucherImage)
+                      }
+                    >
+                      {u.voucherImage ? (
+                        <img
+                          src={u.voucherImage}
+                          className="w-full h-full object-cover"
+                          alt="Voucher"
+                        />
+                      ) : (
+                        <ImageIcon size={16} className="text-slate-300" />
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 font-bold">{u.shopName}</td>
+                  <td className="px-6 py-4 text-indigo-600 font-bold">
+                    {u.partType}
+                  </td>
+                  <td className="px-6 py-4 text-slate-500 italic max-w-[200px] truncate">
+                    {u.remarks || "-"}
+                  </td>
+                  <td className="px-6 py-4 font-medium">
+                    {u.salespersonName}
+                  </td>
+                  {currentUser?.role === "admin" && (
+                    <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => setEditingUsage(u)}
+                        className="p-2 text-slate-400 hover:text-indigo-600"
                       >
-                        {u.voucherImage ? (
-                          <img
-                            src={u.voucherImage}
-                            className="w-full h-full object-cover"
-                            alt="Voucher"
-                          />
-                        ) : (
-                          <ImageIcon size={16} className="text-slate-300" />
-                        )}
-                      </div>
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => deleteItem("usage", u.id)}
+                        className="p-2 text-slate-400 hover:text-rose-600"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </td>
-                    <td className="px-6 py-4 font-bold">{u.shopName}</td>
-                    <td className="px-6 py-4 text-indigo-600 font-bold">
-                      {u.partType}
-                    </td>
-                    <td className="px-6 py-4 font-medium">
-                      {u.salespersonName}
-                    </td>
-                    {currentUser?.role === "admin" && (
-                      <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => setEditingUsage(u)}
-                          className="p-2 text-slate-400 hover:text-indigo-600"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => deleteItem("usage", u.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))
+                  )}
+                </tr>
+              ))
               : filteredRequests.map((r) => (
-                  <tr
-                    key={r.id}
-                    className="hover:bg-slate-50 group transition-colors"
-                  >
-                    <td className="px-6 py-4 text-slate-500">
-                      {new Date(r.createdAt).toLocaleDateString()}
+                <tr
+                  key={r.id}
+                  className="hover:bg-slate-50 group transition-colors"
+                >
+                  <td className="px-6 py-4 text-slate-500">
+                    {new Date(r.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 font-bold">{r.requesterName}</td>
+                  <td className="px-6 py-4">
+                    {r.items
+                      .map((i) => `${i.quantity}x ${i.type}`)
+                      .join(", ")}
+                  </td>
+                  <td className="px-6 py-4">
+                    <StatusBadge status={r.status} />
+                  </td>
+                  {currentUser?.role === "admin" && (
+                    <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => deleteItem("request", r.id)}
+                        className="p-2 text-slate-400 hover:text-rose-600"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </td>
-                    <td className="px-6 py-4 font-bold">{r.requesterName}</td>
-                    <td className="px-6 py-4">
-                      {r.items
-                        .map((i) => `${i.quantity}x ${i.type}`)
-                        .join(", ")}
-                    </td>
-                    <td className="px-6 py-4">
-                      <StatusBadge status={r.status} />
-                    </td>
-                    {currentUser?.role === "admin" && (
-                      <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => deleteItem("request", r.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                  )}
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>

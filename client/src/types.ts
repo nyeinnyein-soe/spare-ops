@@ -46,7 +46,8 @@ export interface UsageRecord {
   partType: string;
   usedAt: number;
   salespersonId: string;
-  salespersonName?: string;
+  salespersonName: string;
+  remarks?: string;
   voucherImage?: string;
 }
 

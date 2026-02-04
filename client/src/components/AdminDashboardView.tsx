@@ -142,6 +142,14 @@ export default function AdminDashboardView({
                 <div className="text-[10px] text-slate-400 font-bold uppercase mb-2">
                   Deployed: {new Date(u.usedAt).toLocaleDateString()}
                 </div>
+                {u.remarks && (
+                  <div className="text-[10px] text-slate-600 bg-amber-50 p-2 rounded border border-amber-100 mb-2 italic">
+                    <span className="font-black text-[8px] uppercase text-amber-400 block mb-0.5 tracking-tighter not-italic">
+                      Remark
+                    </span>
+                    "{u.remarks}"
+                  </div>
+                )}
                 <div className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-100">
                   <span className="font-black text-[8px] uppercase text-slate-400 block mb-0.5 tracking-tighter">
                     By Staff Member
