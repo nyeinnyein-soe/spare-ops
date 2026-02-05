@@ -153,6 +153,25 @@ sudo reboot
 ```
 
 
+## 🚀 Data Migration
+
+If you need to migrate deployment data from a CSV or XLSX file, use the migration script:
+
+1.  Navigate to the server directory:
+    ```bash
+    cd server
+    ```
+2.  Run the migration script:
+    ```bash
+    npx ts-node src/scripts/migrateDeployments.ts <path_to_your_file>
+    ```
+
+**Example:**
+```bash
+npx ts-node src/scripts/migrateDeployments.ts ../"POS spare usage (Responses)_2.xlsx"
+```
+
+
 ## Default Roles & Permissions
 
 *   **Admin:** Full access to Dashboard, History, Staff Directory (Create/Delete users), Audit Reports, and AI Insights.

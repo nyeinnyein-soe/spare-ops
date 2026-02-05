@@ -143,11 +143,11 @@ export default function AdminDashboardView({
                   Deployed: {new Date(u.usedAt).toLocaleDateString()}
                 </div>
                 {u.remarks && (
-                  <div className="text-[10px] text-slate-600 bg-amber-50 p-2 rounded border border-amber-100 mb-2 italic">
-                    <span className="font-black text-[8px] uppercase text-amber-400 block mb-0.5 tracking-tighter not-italic">
-                      Remark
+                  <div className={`text-[10px] p-2 rounded border mb-2 italic ${u.remarks.startsWith("[MIGRATED]") ? "bg-indigo-50 border-indigo-100 text-indigo-700" : "bg-amber-50 border-amber-100 text-slate-600"}`}>
+                    <span className={`font-black text-[8px] uppercase block mb-0.5 tracking-tighter not-italic ${u.remarks.startsWith("[MIGRATED]") ? "text-indigo-400" : "text-amber-400"}`}>
+                      {u.remarks.startsWith("[MIGRATED]") ? "Legacy Data" : "Remark"}
                     </span>
-                    "{u.remarks}"
+                    "{u.remarks.replace("[MIGRATED] ", "").replace("[MIGRATED]", "")}"
                   </div>
                 )}
                 <div className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-100">

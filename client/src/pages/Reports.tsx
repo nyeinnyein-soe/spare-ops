@@ -272,8 +272,21 @@ export default function Reports() {
                   <td className="px-6 py-4 text-indigo-600 font-bold">
                     {u.partType}
                   </td>
-                  <td className="px-6 py-4 text-slate-500 italic max-w-[200px] truncate">
-                    {u.remarks || "-"}
+                  <td className="px-6 py-4">
+                    {u.remarks ? (
+                      <div className="flex items-center gap-2">
+                        {u.remarks.startsWith("[MIGRATED]") && (
+                          <span className="shrink-0 bg-indigo-100 text-indigo-600 text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                            Migrated
+                          </span>
+                        )}
+                        <span className="text-slate-500 italic truncate max-w-[150px]">
+                          {u.remarks.replace("[MIGRATED] ", "").replace("[MIGRATED]", "")}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 font-medium">
                     {u.salespersonName}
