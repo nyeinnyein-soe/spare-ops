@@ -38,6 +38,7 @@ model InventoryItem {
   id           String        @id @default(uuid())
   name         String        @unique
   description  String?
+  currentStock Int           @default(0)
   isArchived   Boolean       @default(false)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt

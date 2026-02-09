@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../db";
+import logger from "../utils/logger";
+import { sendNotification } from "./notificationController";
 
 export const getUsages = async (req: Request, res: Response) => {
   try {
@@ -28,6 +30,7 @@ export const getUsages = async (req: Request, res: Response) => {
 
     res.json(enrichedUsages);
   } catch (error) {
+    logger.error(`Failed to fetch usages: ${error}`);
     res.status(500).json({ error: "Failed to fetch usages" });
   }
 };
@@ -35,11 +38,33 @@ export const getUsages = async (req: Request, res: Response) => {
 export const createUsage = async (req: Request, res: Response) => {
   try {
     const { shopId, inventoryItemId, salespersonId, voucherImage, remarks } = req.body;
-    await prisma.usage.create({
+
+    // Create the usage record
+    const usage = await prisma.usage.create({
       data: { shopId, inventoryItemId, salespersonId, voucherImage, remarks },
+      include: {
+        inventoryItem: true,
+        shop: true,
+        salesperson: true,
+      },
     });
+
+    // Notify admins and managers
+    const managers = await prisma.user.findMany({
+      where: { role: { in: ["admin", "manager"] } },
+    });
+
+    for (const manager of managers) {
+      await sendNotification(
+        manager.id,
+        "New Part Deployment",
+        `${usage.salesperson.name} deployed ${usage.inventoryItem.name} at ${usage.shop.name}.`,
+      );
+    }
+
     res.status(201).json({ message: "Usage logged" });
   } catch (error) {
+    logger.error(`Failed to log usage: ${error}`);
     res.status(500).json({ error: "Failed to log usage" });
   }
 };

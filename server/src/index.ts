@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import morgan from "morgan";
 import authRoutes from "./routes/authRoutes";
 import * as userController from "./controllers/userController";
 import * as requestController from "./controllers/requestController";
@@ -11,6 +12,8 @@ import { authenticateToken } from "./middleware/authMiddleware";
 import { verifyRole } from "./middleware/roleMiddleware";
 import * as merchantController from "./controllers/merchantController";
 import * as shopController from "./controllers/shopController";
+import logger from "./utils/logger";
+import { errorMiddleware } from "./middleware/errorMiddleware";
 
 dotenv.config();
 
@@ -19,6 +22,7 @@ const PORT = Number(process.env.PORT) || 5000;
 
 app.use(cors({ origin: "*", credentials: true }));
 app.use(express.json({ limit: "50mb" }));
+app.use(morgan("combined", { stream: { write: (message) => logger.http(message.trim()) } }));
 
 const apiRouter = express.Router();
 
@@ -111,6 +115,9 @@ apiRouter.patch(
 
 app.use("/api/v1", apiRouter);
 
+// Error Handling Middleware
+app.use(errorMiddleware);
+
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  logger.info(`Server running on http://localhost:${PORT}`);
 });

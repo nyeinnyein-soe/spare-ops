@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../db";
+import logger from "../utils/logger";
 
 export const getInventoryItems = async (req: Request, res: Response) => {
   const { role } = (req as any).user;
@@ -12,6 +13,7 @@ export const getInventoryItems = async (req: Request, res: Response) => {
     });
     res.json(items);
   } catch (error) {
+    logger.error(`Failed to fetch inventory items: ${error}`);
     res.status(500).json({ error: "Failed to fetch inventory items" });
   }
 };
@@ -38,6 +40,7 @@ export const updateInventoryItem = async (req: Request, res: Response) => {
     });
     res.json({ message: "Updated successfully" });
   } catch (error) {
+    logger.error(`Update failed for item ${req.params.id}: ${error}`);
     res.status(500).json({ error: "Update failed" });
   }
 };
