@@ -17,6 +17,7 @@ interface DataContextType {
   usages: UsageRecord[];
   notifications: NotificationItem[];
   inventoryItems: InventoryItem[];
+  stockLogs: any[]; // Ideally use StockLog type
   loading: boolean;
   refreshData: () => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
@@ -35,10 +36,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [usages, setUsages] = useState<UsageRecord[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [stockLogs, setStockLogs] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(false);
 
-  // Use ref to track state inside interval closure
+  // ... (notificationsRef logic)
   const notificationsRef = React.useRef<NotificationItem[]>([]);
 
   useEffect(() => {
@@ -62,18 +64,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     if (!isBackground) setLoading(true);
     try {
-      const [u, r, usg, n, inv] = await Promise.all([
+      const [u, r, usg, n, inv, logs] = await Promise.all([
         db.users.select(),
         db.requests.select(),
         db.usages.select(),
         db.notifications.select(),
         db.inventory.select(),
+        db.inventory.getStockLogs(),
       ]);
 
       setUsers(u || []);
       setRequests(r || []);
       setUsages(usg || []);
       setInventoryItems(inv || []);
+      setStockLogs(logs || []);
+      // ... existing background check logic ...
 
       if (isBackground) {
         // Use ref to get the TRUE current state, not the closure's stale state
@@ -130,6 +135,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         usages,
         notifications,
         inventoryItems,
+        stockLogs,
         loading,
         refreshData: () => syncData(true),
         markNotificationRead,

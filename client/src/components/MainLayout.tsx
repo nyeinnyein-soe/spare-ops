@@ -14,6 +14,7 @@ import {
   User as UserIcon,
   Bell,
   Building,
+  Truck,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useData } from "../contexts/DataContext";
@@ -81,12 +82,12 @@ export default function MainLayout() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 relative">
+    <div className="min-h-full flex flex-col md:flex-row bg-slate-50 relative overflow-x-hidden">
       <Toast message={toast.msg} show={toast.show} type={toast.type} />
 
 
-      <nav className="w-full md:w-64 bg-white border-r border-slate-200 p-4 flex flex-col gap-2 shadow-sm shrink-0 z-30">
-        <div className="flex items-center gap-2 px-2 py-4 mb-4 border-b">
+      <nav className="w-full md:w-64 bg-slate-50 md:bg-white border-r border-slate-200 p-4 flex flex-col gap-2 shadow-sm shrink-0 z-30">
+        <div className="flex items-center gap-2 px-2 py-4 mb-4 border-b border-slate-200/60">
           <div className="bg-indigo-600 p-2 rounded-lg text-white shadow-lg shadow-indigo-200">
             <Package size={24} />
           </div>
@@ -137,6 +138,11 @@ export default function MainLayout() {
               icon={<Building size={20} />}
               label="Merchants"
             />
+            <NavItem
+              path="/suppliers"
+              icon={<Truck size={20} />}
+              label="Suppliers"
+            />
           </>
         )}
 
@@ -173,9 +179,9 @@ export default function MainLayout() {
         </div>
       </nav>
 
-      <main className="flex-1 p-6 md:p-10 overflow-auto">
-        <header className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 capitalize">
+      <main className="flex-1 overflow-auto bg-slate-50">
+        <header className="flex justify-between items-center px-6 md:px-10 pt-10 mb-2">
+          <h1 className="text-2xl font-black text-slate-900 capitalize tracking-tight">
             {location.pathname === "/"
               ? "Dashboard"
               : location.pathname.replace("/", "").replace("-", " ")}

@@ -51,8 +51,13 @@ export default function NewRequest() {
               <div className="font-bold text-slate-800 text-lg leading-tight">
                 {item.name}
               </div>
-              <div className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">
-                Inventory Supply
+              <div className="flex items-center gap-2 mt-1">
+                <div className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">
+                  Inventory Supply
+                </div>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${item.currentStock > 5 ? "bg-slate-100 text-slate-500" : "bg-rose-100 text-rose-600"}`}>
+                  Availability: {item.currentStock}
+                </span>
               </div>
             </div>
             <div className="flex items-center gap-6">
@@ -74,7 +79,8 @@ export default function NewRequest() {
                 onClick={() =>
                   setQtys({ ...qtys, [item.id]: (qtys[item.id] || 0) + 1 })
                 }
-                className="h-12 w-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center font-black shadow-sm text-indigo-600 hover:border-indigo-100 transition-all"
+                disabled={(qtys[item.id] || 0) >= item.currentStock}
+                className="h-12 w-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center font-black shadow-sm text-indigo-600 hover:border-indigo-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
               >
                 +
               </button>

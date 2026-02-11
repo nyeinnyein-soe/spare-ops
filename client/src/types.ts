@@ -9,6 +9,7 @@ export interface InventoryItem {
   id: string;
   name: string;
   description?: string;
+  currentStock: number;
   isArchived: boolean;
 }
 
@@ -72,6 +73,30 @@ export interface NotificationItem {
   message: string;
   isRead: boolean;
   createdAt: string;
+}
+
+export interface StockLog {
+  id: string;
+  inventoryItemId: string;
+  inventoryItem?: { name: string };
+  change: number;
+  previousStock: number;
+  newStock: number;
+  reason: string;
+  referenceId?: string;
+  performerId: string;
+  performer?: { name: string };
+  supplierId?: string;
+  supplier?: { name: string };
+  remarks?: string;
+  createdAt: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contact?: string;
+  address?: string;
 }
 
 export const AVATAR_COLORS = [

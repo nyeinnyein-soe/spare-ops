@@ -13,6 +13,8 @@ import NewRequest from "./pages/NewRequest";
 import Insights from "./pages/Insights";
 import InventoryItems from "./pages/InventoryItems";
 import Merchants from "./pages/Merchants";
+import Suppliers from "./pages/Suppliers";
+import StockJournal from "./pages/StockJournal";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import NotFound from "./pages/NotFound";
@@ -45,6 +47,8 @@ export default function App() {
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/inventory-items" element={<InventoryItems />} />
                 <Route path="/merchants" element={<Merchants />} />
+                <Route path="/suppliers" element={<Suppliers />} />
+                <Route path="/stock-journal" element={<StockJournal />} />
               </Route>
 
               {/* Admin Only */}

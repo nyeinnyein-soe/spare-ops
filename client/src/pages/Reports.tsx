@@ -28,11 +28,11 @@ import DateRangePicker from "../components/DateRangePicker";
 import ImageViewer from "../components/ImageViewer";
 
 export default function Reports() {
-  // 1. Get inventoryItems from context
-  const { requests, usages, inventoryItems, refreshData } = useData();
+  // 1. Get inventoryItems and stockLogs from context
+  const { requests, usages, inventoryItems, stockLogs, refreshData } = useData();
   const { currentUser } = useAuth();
 
-  const [tab, setTab] = useState<"usage" | "request">("request");
+  const [tab, setTab] = useState<"usage" | "request" | "stock">("request");
   const [editingUsage, setEditingUsage] = useState<UsageRecord | null>(null);
   const [viewImage, setViewImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -98,6 +98,59 @@ export default function Reports() {
     });
   }, [requests, startDate, endDate, searchQuery]);
 
+  const filteredStockLogs = useMemo(() => {
+    return stockLogs.filter((log) => filterByDate(new Date(log.createdAt).getTime()));
+  }, [stockLogs, startDate, endDate]);
+
+  const stockSnapshot = useMemo(() => {
+    if (tab !== "stock") return [];
+
+    const start = startDate ? new Date(startDate) : new Date(0);
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+
+    return inventoryItems.map((item) => {
+      // Changes DURING the selected period
+      const logsInPeriod = stockLogs.filter(
+        (l) =>
+          l.inventoryItemId === item.id &&
+          new Date(l.createdAt) >= start &&
+          new Date(l.createdAt) <= end
+      );
+
+      // Changes AFTER the selected period until NOW
+      const logsAfterPeriod = stockLogs.filter(
+        (l) =>
+          l.inventoryItemId === item.id &&
+          new Date(l.createdAt) > end
+      );
+
+      const totalIn = logsInPeriod
+        .filter((l) => l.change > 0)
+        .reduce((sum, l) => sum + l.change, 0);
+
+      const totalOut = Math.abs(
+        logsInPeriod
+          .filter((l) => l.change < 0)
+          .reduce((sum, l) => sum + l.change, 0)
+      );
+
+      const changeAfter = logsAfterPeriod.reduce((sum, l) => sum + l.change, 0);
+      const periodEndStock = item.currentStock - changeAfter;
+      const periodStartStock = periodEndStock - (totalIn - totalOut);
+
+      return {
+        id: item.id,
+        name: item.name,
+        startStock: periodStartStock,
+        totalIn,
+        totalOut,
+        endStock: periodEndStock,
+        current: item.currentStock
+      };
+    });
+  }, [tab, inventoryItems, stockLogs, startDate, endDate]);
+
   const stats = useMemo(() => {
     if (tab === "usage") {
       const uniqueShops = new Set(filteredUsages.map(u => u.shopName)).size;
@@ -107,7 +160,7 @@ export default function Reports() {
         shops: uniqueShops,
         items: uniqueItems
       };
-    } else {
+    } else if (tab === "request") {
       const breakdown = filteredRequests.reduce((acc, r) => {
         acc[r.status] = (acc[r.status] || 0) + 1;
         return acc;
@@ -116,33 +169,43 @@ export default function Reports() {
         total: filteredRequests.length,
         ...breakdown
       };
+    } else {
+      const totalIn = stockSnapshot.reduce((sum, s) => sum + s.totalIn, 0);
+      const totalOut = stockSnapshot.reduce((sum, s) => sum + s.totalOut, 0);
+      return {
+        totalIn,
+        totalOut,
+        netChange: totalIn - totalOut
+      };
     }
-  }, [tab, filteredUsages, filteredRequests]);
+  }, [tab, filteredUsages, filteredRequests, stockSnapshot]);
 
   const sortedData = useMemo(() => {
-    const data = tab === "usage" ? [...filteredUsages] : [...filteredRequests];
+    const data = tab === "usage" ? [...filteredUsages] : tab === "request" ? [...filteredRequests] : [...stockSnapshot];
     if (!sortConfig.key || !sortConfig.direction) return data;
 
     return data.sort((a: any, b: any) => {
       let aVal: any = "";
       let bVal: any = "";
 
-      // Map keys to actual data properties
       if (tab === "usage") {
         if (sortConfig.key === "date") { aVal = new Date(a.usedAt).getTime(); bVal = new Date(b.usedAt).getTime(); }
         else if (sortConfig.key === "shop") { aVal = a.shopName.toLowerCase(); bVal = b.shopName.toLowerCase(); }
         else if (sortConfig.key === "items") { aVal = a.partType.toLowerCase(); bVal = b.partType.toLowerCase(); }
         else if (sortConfig.key === "staff") { aVal = a.salespersonName.toLowerCase(); bVal = b.salespersonName.toLowerCase(); }
-      } else {
+      } else if (tab === "request") {
         if (sortConfig.key === "date") { aVal = new Date(a.createdAt).getTime(); bVal = new Date(b.createdAt).getTime(); }
         else if (sortConfig.key === "requester") { aVal = a.requesterName.toLowerCase(); bVal = b.requesterName.toLowerCase(); }
         else if (sortConfig.key === "status") { aVal = a.status.toLowerCase(); bVal = b.status.toLowerCase(); }
+      } else {
+        if (sortConfig.key === "name") { aVal = (a.name || "").toLowerCase(); bVal = (b.name || "").toLowerCase(); }
+        else { aVal = (a as any)[sortConfig.key]; bVal = (b as any)[sortConfig.key]; }
       }
 
       if (sortConfig.direction === "asc") return aVal > bVal ? 1 : -1;
       return aVal < bVal ? 1 : -1;
     });
-  }, [tab, filteredUsages, filteredRequests, sortConfig]);
+  }, [tab, filteredUsages, filteredRequests, stockSnapshot, sortConfig]);
 
   const handleSort = (key: string) => {
     let direction: "asc" | "desc" | null = "asc";
@@ -220,28 +283,42 @@ export default function Reports() {
 
   const handleExport = async () => {
     const timestamp = new Date().toISOString().split("T")[0];
-    const dataToExport = tab === "usage"
-      ? (sortedData as typeof filteredUsages).map((u) => ({
+    let dataToExport: any[] = [];
+    let filename = "";
+
+    if (tab === "usage") {
+      dataToExport = (sortedData as typeof filteredUsages).map((u) => ({
         Date: new Date(u.usedAt).toLocaleDateString(),
         "Shop Name": u.shopName,
         "Item Type": u.partType,
         "Staff Name": u.salespersonName,
         "Remarks": u.remarks || "-",
-        "Voucher Attached": u.voucherImage ? "Yes" : "No",
-      }))
-      : (sortedData as typeof filteredRequests).map((r) => ({
+      }));
+      filename = `Deployments_Report_${timestamp}`;
+    } else if (tab === "request") {
+      dataToExport = (sortedData as typeof filteredRequests).map((r) => ({
         "Date Created": new Date(r.createdAt).toLocaleDateString(),
         Requester: r.requesterName,
         Items: r.items.map((i) => `${i.quantity}x ${i.type}`).join(", "),
         Status: r.status,
-        "Approved Date": r.approvedAt
-          ? new Date(r.approvedAt).toLocaleDateString()
-          : "-",
       }));
+      filename = `Requisitions_Report_${timestamp}`;
+    } else {
+      dataToExport = (sortedData as typeof stockSnapshot).map((s) => ({
+        Item: s.name,
+        "Opening Stock": s.startStock,
+        "Stock Received (+)": s.totalIn,
+        "Stock Deployed (-)": s.totalOut,
+        "Closing Stock": s.endStock,
+        "Current Balance": s.current,
+      }));
+      filename = `Stock_Inventory_Report_${timestamp}`;
+    }
 
-    const filename = tab === "usage" ? `Deployments_Report_${timestamp}` : `Requisitions_Report_${timestamp}`;
     await exportToExcel(dataToExport, filename);
   };
+
+  // ... (header UI, tab buttons etc)
 
   const handleUpdateUsage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -336,6 +413,12 @@ export default function Reports() {
             className={`px-8 py-2.5 rounded-xl text-xs font-black tracking-tight transition-all duration-200 ${tab === "usage" ? "bg-white shadow-md text-indigo-600 scale-100" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
           >
             DEPLOYMENTS
+          </button>
+          <button
+            onClick={() => setTab("stock")}
+            className={`px-8 py-2.5 rounded-xl text-xs font-black tracking-tight transition-all duration-200 ${tab === "stock" ? "bg-white shadow-md text-indigo-600 scale-100" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}
+          >
+            STOCK REPORT
           </button>
         </div>
 
@@ -437,7 +520,7 @@ export default function Reports() {
               </div>
             </div>
           </>
-        ) : (
+        ) : tab === "request" ? (
           <>
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
               <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
@@ -476,6 +559,36 @@ export default function Reports() {
               </div>
             </div>
           </>
+        ) : (
+          <>
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                <ChevronUp size={22} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1">Stock In (+)</p>
+                <p className="text-xl font-black text-slate-900 leading-none">{(stats as any).totalIn}</p>
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600">
+                <ChevronDown size={22} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1">Stock Out (-)</p>
+                <p className="text-xl font-black text-slate-900 leading-none">{(stats as any).totalOut}</p>
+              </div>
+            </div>
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
+              <div className={`h-12 w-12 rounded-2xl ${(stats as any).netChange >= 0 ? "bg-blue-50 text-blue-600" : "bg-amber-50 text-amber-600"} flex items-center justify-center`}>
+                <RotateCcw size={22} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1">Net Change</p>
+                <p className="text-xl font-black text-slate-900 leading-none">{(stats as any).netChange > 0 ? "+" : ""}{(stats as any).netChange}</p>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -483,32 +596,69 @@ export default function Reports() {
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 border-b">
             <tr>
-              <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("date")}>
-                <div className="flex items-center">Date <SortIndicator column="date" /></div>
+              <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort(tab === "stock" ? "name" : "date")}>
+                <div className="flex items-center">{tab === "stock" ? "Part Name" : "Date"} <SortIndicator column={tab === "stock" ? "name" : "date"} /></div>
               </th>
               {tab === "usage" && <th className="px-6 py-4">Proof</th>}
-              <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort(tab === "usage" ? "shop" : "requester")}>
-                <div className="flex items-center">
-                  {tab === "usage" ? "Shop" : "Requester"} <SortIndicator column={tab === "usage" ? "shop" : "requester"} />
-                </div>
-              </th>
-              <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => tab === "usage" && handleSort("items")}>
-                <div className="flex items-center">Item(s) {tab === "usage" && <SortIndicator column="items" />}</div>
-              </th>
-              {tab === "usage" && <th className="px-6 py-4">Remark</th>}
-              <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort(tab === "usage" ? "staff" : "status")}>
-                <div className="flex items-center">
-                  {tab === "usage" ? "Staff" : "Status"} <SortIndicator column={tab === "usage" ? "staff" : "status"} />
-                </div>
-              </th>
-              {currentUser?.role === "admin" && (
+              {tab === "stock" ? (
+                <>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("startStock")}>
+                    <div className="flex items-center">Opening <SortIndicator column="startStock" /></div>
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("totalIn")}>
+                    <div className="flex items-center text-emerald-600">Stock In (+) <SortIndicator column="totalIn" /></div>
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("totalOut")}>
+                    <div className="flex items-center text-rose-600">Stock Out (-) <SortIndicator column="totalOut" /></div>
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("endStock")}>
+                    <div className="flex items-center font-bold text-slate-900">Closing <SortIndicator column="endStock" /></div>
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("current")}>
+                    <div className="flex items-center">Live Balance <SortIndicator column="current" /></div>
+                  </th>
+                </>
+              ) : (
+                <>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort(tab === "usage" ? "shop" : "requester")}>
+                    <div className="flex items-center">
+                      {tab === "usage" ? "Shop" : "Requester"} <SortIndicator column={tab === "usage" ? "shop" : "requester"} />
+                    </div>
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => tab === "usage" && handleSort("items")}>
+                    <div className="flex items-center">Item(s) {tab === "usage" && <SortIndicator column="items" />}</div>
+                  </th>
+                  {tab === "usage" && <th className="px-6 py-4">Remark</th>}
+                  <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort(tab === "usage" ? "staff" : "status")}>
+                    <div className="flex items-center">
+                      {tab === "usage" ? "Staff" : "Status"} <SortIndicator column={tab === "usage" ? "staff" : "status"} />
+                    </div>
+                  </th>
+                </>
+              )}
+              {currentUser?.role === "admin" && tab !== "stock" && (
                 <th className="px-6 py-4 text-right">Actions</th>
               )}
             </tr>
           </thead>
           <tbody className="divide-y text-sm">
-            {tab === "usage"
-              ? (paginatedData as typeof filteredUsages).map((u) => (
+            {tab === "stock" ? (
+              (paginatedData as typeof stockSnapshot).map((s) => (
+                <tr key={s.id} className="hover:bg-slate-50 group transition-colors">
+                  <td className="px-6 py-4 font-bold text-slate-900">{s.name}</td>
+                  <td className="px-6 py-4 text-slate-500 font-medium">{s.startStock}</td>
+                  <td className="px-6 py-4 text-emerald-600 font-black">+{s.totalIn}</td>
+                  <td className="px-6 py-4 text-rose-600 font-black">-{s.totalOut}</td>
+                  <td className="px-6 py-4 font-black text-slate-900">{s.endStock}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${s.current <= 10 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>
+                      {s.current} Units
+                    </span>
+                  </td>
+                </tr>
+              ))
+            ) : tab === "usage" ? (
+              (paginatedData as typeof filteredUsages).map((u) => (
                 <tr
                   key={u.id}
                   className="hover:bg-slate-50 group transition-colors"
@@ -575,35 +725,35 @@ export default function Reports() {
                   )}
                 </tr>
               ))
-              : (paginatedData as typeof filteredRequests).map((r) => (
-                <tr
-                  key={r.id}
-                  className="hover:bg-slate-50 group transition-colors"
-                >
-                  <td className="px-6 py-4 text-slate-500">
-                    {new Date(r.createdAt).toLocaleDateString()}
+            ) : (paginatedData as typeof filteredRequests).map((r) => (
+              <tr
+                key={r.id}
+                className="hover:bg-slate-50 group transition-colors"
+              >
+                <td className="px-6 py-4 text-slate-500">
+                  {new Date(r.createdAt).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4 font-bold">{r.requesterName}</td>
+                <td className="px-6 py-4">
+                  {r.items
+                    .map((i) => `${i.quantity}x ${i.type}`)
+                    .join(", ")}
+                </td>
+                <td className="px-6 py-4">
+                  <StatusBadge status={r.status} />
+                </td>
+                {currentUser?.role === "admin" && (
+                  <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => deleteItem("request", r.id)}
+                      className="p-2 text-slate-400 hover:text-rose-600"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </td>
-                  <td className="px-6 py-4 font-bold">{r.requesterName}</td>
-                  <td className="px-6 py-4">
-                    {r.items
-                      .map((i) => `${i.quantity}x ${i.type}`)
-                      .join(", ")}
-                  </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge status={r.status} />
-                  </td>
-                  {currentUser?.role === "admin" && (
-                    <td className="px-6 py-4 text-right flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => deleteItem("request", r.id)}
-                        className="p-2 text-slate-400 hover:text-rose-600"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
+                )}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

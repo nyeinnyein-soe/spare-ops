@@ -7,6 +7,8 @@ import {
   InventoryItem,
   Merchant,
   Shop,
+  StockLog,
+  Supplier,
 } from "../types";
 
 export const db = {
@@ -66,17 +68,38 @@ export const db = {
     insert: async (data: {
       name: string;
       description?: string;
+      currentStock?: number;
     }): Promise<void> => {
       await api.post("/inventory-items", data);
     },
     update: async (
       id: string,
-      data: { name: string; description?: string },
+      data: { name: string; description?: string; currentStock?: number },
     ): Promise<void> => {
       await api.put(`/inventory-items/${id}`, data);
     },
     toggleArchive: async (id: string): Promise<void> => {
       await api.patch(`/inventory-items/${id}/archive`, {});
+    },
+    adjust: async (
+      id: string,
+      data: { action: string; amount: number; remarks?: string; supplierId?: string },
+    ): Promise<void> => {
+      await api.post(`/inventory-items/${id}/adjust`, data);
+    },
+    getStockLogs: async (
+      itemId?: string,
+      supplierId?: string,
+      startDate?: string,
+      endDate?: string,
+    ): Promise<StockLog[]> => {
+      const params = new URLSearchParams();
+      if (itemId) params.append("itemId", itemId);
+      if (supplierId) params.append("supplierId", supplierId);
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
+      const url = `/inventory-items/stock-logs${params.toString() ? `?${params.toString()}` : ""}`;
+      return api.get(url);
     },
   },
 
@@ -122,10 +145,28 @@ export const db = {
       return api.get("/notifications");
     },
     markRead: async (id: string) => {
-      return api.patch(`/notifications/${id}/read`, {});
+      await api.patch(`/notifications/${id}/read`, {});
     },
     clearAll: async () => {
-      return api.post("/notifications/clear", {});
+      await api.post("/notifications/clear", {});
+    },
+  },
+
+  suppliers: {
+    getAll: async (): Promise<Supplier[]> => {
+      return api.get("/suppliers");
+    },
+    getById: async (id: string): Promise<Supplier> => {
+      return api.get(`/suppliers/${id}`);
+    },
+    insert: async (data: Partial<Supplier>): Promise<Supplier> => {
+      return api.post("/suppliers", data);
+    },
+    update: async (id: string, data: Partial<Supplier>): Promise<Supplier> => {
+      return api.put(`/suppliers/${id}`, data);
+    },
+    delete: async (id: string): Promise<void> => {
+      await api.delete(`/suppliers/${id}`);
     },
   },
 };
