@@ -8,6 +8,7 @@ import * as requestController from "./controllers/requestController";
 import * as usageController from "./controllers/usageController";
 import * as notificationController from "./controllers/notificationController";
 import * as inventoryItemController from "./controllers/inventoryItemController";
+import * as supplierController from "./controllers/supplierController";
 import { authenticateToken } from "./middleware/authMiddleware";
 import { verifyRole } from "./middleware/roleMiddleware";
 import * as merchantController from "./controllers/merchantController";
@@ -108,10 +109,25 @@ apiRouter.put(
   "/inventory-items/:id",
   inventoryItemController.updateInventoryItem,
 );
+apiRouter.get(
+  "/inventory-items/stock-logs",
+  inventoryItemController.getStockLogs,
+);
+apiRouter.post(
+  "/inventory-items/:id/adjust",
+  inventoryItemController.adjustStock,
+);
 apiRouter.patch(
   "/inventory-items/:id/archive",
   inventoryItemController.toggleArchiveInventoryItem,
 );
+
+// Suppliers
+apiRouter.get("/suppliers", supplierController.getSuppliers);
+apiRouter.get("/suppliers/:id", supplierController.getSupplierById);
+apiRouter.post("/suppliers", supplierController.createSupplier);
+apiRouter.put("/suppliers/:id", supplierController.updateSupplier);
+apiRouter.delete("/suppliers/:id", supplierController.deleteSupplier);
 
 app.use("/api/v1", apiRouter);
 

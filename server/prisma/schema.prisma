@@ -30,6 +30,7 @@ model User {
   requests      Request[]
   usages        Usage[]
   notifications Notification[]
+  stockLogs     StockLog[]
 
   @@map("users")
 }
@@ -44,8 +45,39 @@ model InventoryItem {
   updatedAt    DateTime      @updatedAt
   requestItems RequestItem[]
   usages       Usage[]
+  stockLogs    StockLog[]
 
   @@map("inventory_items")
+}
+
+model StockLog {
+  id              String        @id @default(uuid())
+  inventoryItemId String
+  change          Int
+  previousStock   Int
+  newStock        Int
+  reason          String
+  referenceId     String?
+  performerId     String
+  supplierId      String?
+  remarks         String?
+  createdAt       DateTime      @default(now())
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  performer       User          @relation(fields: [performerId], references: [id])
+  supplier        Supplier?     @relation(fields: [supplierId], references: [id])
+
+  @@map("stock_logs")
+}
+
+model Supplier {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  contact   String?
+  address   String?
+  createdAt DateTime   @default(now())
+  stockLogs StockLog[]
+
+  @@map("suppliers")
 }
 
 model Request {
