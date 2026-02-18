@@ -11,10 +11,10 @@ export const errorMiddleware = (
     const message = err.message || "Internal Server Error";
 
     logger.error(
-        `${status} - ${message} - ${req.originalUrl} - ${req.method} - ${req.ip} - Stack: ${err.stack}`,
+        `${status} - ${message} - ${req.originalUrl} - ${req.method} - ${req.ip}${err.stack ? ` - Stack: ${err.stack}` : ""}`,
     );
 
     res.status(status).json({
-        error: process.env.NODE_ENV === "development" ? message : "Internal Server Error",
+        error: process.env.NODE_ENV === "development" ? message : (status >= 500 ? "Internal Server Error" : message),
     });
 };

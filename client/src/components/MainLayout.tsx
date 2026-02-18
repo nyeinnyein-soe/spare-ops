@@ -119,11 +119,6 @@ export default function MainLayout() {
         {(currentUser.role === "admin" || currentUser.role === "manager") && (
           <>
             <NavItem
-              path="/inventory-items"
-              icon={<Package size={20} />}
-              label="Spare Parts"
-            />
-            <NavItem
               path="/staff"
               icon={<UsersIcon size={20} />}
               label="Staff Directory"
@@ -147,11 +142,18 @@ export default function MainLayout() {
         )}
 
         {currentUser.role === "admin" && (
-          <NavItem
-            path="/insights"
-            icon={<Sparkles size={20} />}
-            label="AI Insights"
-          />
+          <>
+            <NavItem
+              path="/inventory-items"
+              icon={<Package size={20} />}
+              label="Inventory"
+            />
+            <NavItem
+              path="/insights"
+              icon={<Sparkles size={20} />}
+              label="AI Insights"
+            />
+          </>
         )}
 
         <div className="mt-auto pt-4 border-t space-y-4">

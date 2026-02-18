@@ -10,6 +10,7 @@ import { db } from "../services/dbService";
 import { RequestStatus, Shop } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import SearchableSelect from "./SearchableSelect";
+import { compressToWebP } from "../utils/imageUtils";
 
 export default function SalesDashboardView({
   requests,
@@ -41,6 +42,7 @@ export default function SalesDashboardView({
   const [selectedItemId, setSelectedItemId] = useState("");
   const [remarks, setRemarks] = useState("");
   const [img, setImg] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // --- 1. FIXED INVENTORY CALCULATION ---
@@ -93,13 +95,23 @@ export default function SalesDashboardView({
     }));
   }, [onHand]);
 
-  const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
 
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setImg(reader.result as string);
-      reader.readAsDataURL(file);
+      try {
+        setIsCompressing(true);
+        const compressedBase64 = await compressToWebP(file);
+        setImg(compressedBase64);
+      } catch (error) {
+        console.error("Compression failed:", error);
+        // Fallback to original if compression fails (though we should avoid this if possible)
+        const reader = new FileReader();
+        reader.onloadend = () => setImg(reader.result as string);
+        reader.readAsDataURL(file);
+      } finally {
+        setIsCompressing(false);
+      }
     }
   };
 
@@ -241,11 +253,12 @@ export default function SalesDashboardView({
                   />
                 </div>
                 <button
+                  disabled={isCompressing}
                   onClick={() => fileInput.current?.click()}
                   className={`px-5 py-4 rounded-2xl border-2 border-dashed flex items-center gap-2 font-black text-xs transition-all ${img ? "bg-emerald-50 border-emerald-500 text-emerald-700" : "border-slate-300 text-slate-400 hover:border-indigo-500 hover:text-indigo-600"}`}
                 >
                   {img ? <CheckCircle size={20} /> : <Camera size={20} />}
-                  {img ? "Attached" : "Proof"}
+                  {isCompressing ? "Compressing..." : (img ? "Attached" : "Proof")}
                 </button>
                 <input
                   type="file"

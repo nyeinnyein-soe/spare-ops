@@ -22,7 +22,7 @@ const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 
 app.use(cors({ origin: "*", credentials: true }));
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json({ limit: "2mb" }));
 app.use(morgan("combined", { stream: { write: (message) => logger.http(message.trim()) } }));
 
 const apiRouter = express.Router();
@@ -48,8 +48,6 @@ apiRouter.delete("/usages/:id", usageController.deleteUsage);
 
 apiRouter.get("/notifications", notificationController.getMyNotifications);
 apiRouter.patch("/notifications/:id/read", notificationController.markAsRead);
-apiRouter.post("/notifications/clear", notificationController.clearAll);
-
 apiRouter.post("/notifications/clear", notificationController.clearAll);
 
 // Merchant Routes (Admin/Manager only)
