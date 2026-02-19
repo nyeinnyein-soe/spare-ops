@@ -175,44 +175,44 @@ export default function Suppliers() {
 
   return (
     <div className="min-h-full pb-20">
-      <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="max-w-[1400px] mx-auto px-6 md:px-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         {/* Header */}
         <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pt-8">
           <div>
-            <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs uppercase tracking-[0.2em] mb-2">
-              <div className="w-6 h-[2px] bg-indigo-600 rounded-full" />
+            <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm uppercase tracking-[0.2em] mb-2">
+              <div className="w-8 h-[2px] bg-indigo-600 rounded-full" />
               Procurement
             </div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none">
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
               Supplier Network
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-4">
             <div className="relative group">
               <Search
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors"
-                size={16}
+                size={18}
               />
               <input
                 type="text"
                 placeholder="Search partners..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-11 pr-5 py-3 bg-white border border-slate-200 rounded-xl w-full md:w-[260px] outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all font-bold text-sm text-slate-600 shadow-sm placeholder:font-medium"
+                className="pl-12 pr-6 py-4 bg-white border border-slate-200 rounded-2xl w-full md:w-[320px] outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all font-medium text-slate-600 shadow-sm"
               />
             </div>
             <button
               onClick={() => openModal()}
-              className="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-xl shadow-slate-200 active:scale-95"
+              className="bg-slate-900 hover:bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold text-sm flex items-center gap-3 transition-all shadow-xl shadow-slate-200 active:scale-95 hover:-translate-y-1"
             >
-              <PlusCircle size={18} /> Register Supplier
+              <PlusCircle size={20} /> Register Supplier
             </button>
           </div>
         </header>
 
         {/* USEFUL Stats Section */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <StatCard
             label="Active Partners (30d)"
             value={supplierStats.activeCount}
@@ -241,7 +241,7 @@ export default function Suppliers() {
         </section>
 
         {/* Supplier Grid */}
-        <main className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredSuppliers.map((supplier) => {
             const stats = supplierStats.map.get(supplier.id) || {
               count: 0,
@@ -435,32 +435,25 @@ function StatCard({
   isTextValue = false,
 }: any) {
   return (
-    <div className="p-6 rounded-[2rem] border border-white shadow-xl shadow-slate-200/50 flex flex-col justify-between bg-white h-full relative overflow-hidden group">
+    <div className="p-6 rounded-3xl border border-white transition-all duration-300 bg-white shadow-xl shadow-slate-200/50 flex items-center gap-6 group hover:-translate-y-1">
       <div
-        className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity ${color}`}
+        className={`h-14 w-14 rounded-2xl ${bgColor} ${color} flex items-center justify-center transition-transform group-hover:scale-110`}
       >
-        {React.cloneElement(icon, { size: 80 })}
+        {React.cloneElement(icon as React.ReactElement<any>, { size: 26 })}
       </div>
-
-      <div className="flex items-center gap-4 mb-4">
+      <div className="min-w-0 flex-1">
         <div
-          className={`h-12 w-12 rounded-xl ${bgColor} ${color} flex items-center justify-center`}
-        >
-          {React.cloneElement(icon, { size: 24 })}
-        </div>
-        <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
-          {label}
-        </div>
-      </div>
-
-      <div>
-        <div
-          className={`${isTextValue ? "text-xl md:text-2xl" : "text-4xl"} font-black text-slate-900 leading-tight mb-1 truncate`}
+          className={`${isTextValue ? "text-xl" : "text-3xl"} font-black text-slate-900 leading-none mb-1 truncate`}
         >
           {value}
         </div>
+        <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-0.5">
+          {label}
+        </div>
         {subValue && (
-          <div className="text-xs font-bold text-slate-400">{subValue}</div>
+          <div className="text-[10px] font-bold text-slate-400 truncate">
+            {subValue}
+          </div>
         )}
       </div>
     </div>

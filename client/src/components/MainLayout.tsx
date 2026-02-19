@@ -268,7 +268,7 @@ export default function MainLayout() {
           </div>
         </header>
 
-        <section className="max-w-6xl mx-auto">
+        <section className="max-w-7xl mx-auto">
           <Outlet />
         </section>
       </main>

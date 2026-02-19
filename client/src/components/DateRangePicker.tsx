@@ -36,9 +36,9 @@ export default function DateRangePicker({ startDate, endDate, onChange }: DateRa
 
   return (
     <div className="relative group flex items-center">
-      <CalendarIcon 
-        size={16} 
-        className="absolute left-3.5 text-slate-400 group-hover:text-blue-600 transition-colors pointer-events-none z-10" 
+      <CalendarIcon
+        size={16}
+        className="absolute left-3.5 text-slate-400 group-hover:text-blue-600 transition-colors pointer-events-none z-10"
       />
       <ReactDatePicker
         selectsRange={true}
@@ -48,15 +48,12 @@ export default function DateRangePicker({ startDate, endDate, onChange }: DateRa
         monthsShown={2}
         dateFormat="MMM d, yyyy"
         placeholderText="Select date range"
-        className="w-64 pl-10 pr-4 py-2.5 text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer tracking-wide"
-        
+        className="w-80 pl-12 pr-4 py-3 text-sm font-bold text-slate-800 bg-white border border-slate-200 rounded-2xl outline-none cursor-pointer tracking-tight shadow-sm hover:border-blue-500 transition-all"
+
         // --- THE FIXES ---
-        // 1. Render in Body to avoid 'overflow-hidden' clipping
         popperContainer={({ children }) => createPortal(children, document.body)}
-        // 2. Adjust z-index to sit above everything
-        popperClassName="z-[9999]" 
-        // 3. Prevent keyboard typing
-        onKeyDown={(e) => e.preventDefault()} 
+        popperClassName="react-datepicker-popper"
+        onKeyDown={(e) => e.preventDefault()}
       />
     </div>
   );

@@ -34,10 +34,10 @@ export default function NewRequest() {
       <div className="h-20 w-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-600 mx-auto mb-8">
         <ClipboardList size={40} />
       </div>
-      <h2 className="text-4xl font-black mb-2 text-center text-slate-900">
+      <h1 className="text-2xl font-black mb-2 text-center text-slate-900">
         Requisition
-      </h2>
-      <p className="text-center text-slate-400 text-sm font-medium mb-10">
+      </h1>
+      <p className="text-center text-[10px] font-black uppercase text-slate-400 tracking-widest mb-10">
         Select equipment quantities.
       </p>
 

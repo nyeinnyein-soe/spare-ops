@@ -338,7 +338,14 @@ export default function Reports() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-[1400px] mx-auto px-6 md:px-10 py-8 space-y-8 animate-in fade-in duration-500">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-1 bg-indigo-600 rounded-full" />
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
+          Audit Reports
+        </h1>
+      </div>
+
       {viewImage && (
         <ImageViewer src={viewImage} onClose={() => setViewImage(null)} />
       )}
@@ -481,7 +488,7 @@ export default function Reports() {
           {/* Export Button */}
           <button
             onClick={handleExport}
-            className="flex items-center gap-2 bg-slate-900 hover:bg-black text-white px-5 py-4 rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-slate-200 transition-all active:scale-95 hover:-translate-y-0.5 whitespace-nowrap"
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-4 rounded-2xl font-black text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-200 transition-all active:scale-95 hover:-translate-y-0.5 whitespace-nowrap"
           >
             <Download size={16} /> Export Data
           </button>

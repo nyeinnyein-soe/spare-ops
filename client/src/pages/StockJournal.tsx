@@ -11,7 +11,9 @@ import {
   AlertCircle,
   Building2,
   RotateCcw,
+  Download,
 } from "lucide-react";
+import ExcelJS from "exceljs";
 import { db } from "../services/dbService";
 import { StockLog, InventoryItem, Supplier } from "../types";
 import DateRangePicker from "../components/DateRangePicker";
@@ -26,6 +28,7 @@ export default function StockJournal() {
 
   const [logs, setLogs] = useState<StockLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [targetItem, setTargetItem] = useState<InventoryItem | null>(null);
   const [targetSupplier, setTargetSupplier] = useState<Supplier | null>(null);
 
@@ -111,10 +114,83 @@ export default function StockJournal() {
     setEndDate(d.toISOString().split('T')[0]);
   };
 
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Stock Journal");
+
+      // Define columns
+      worksheet.columns = [
+        { header: "Date", key: "date", width: 12 },
+        { header: "Time", key: "time", width: 10 },
+        { header: "Item Name", key: "itemName", width: 25 },
+        { header: "Ref ID", key: "refId", width: 15 },
+        { header: "Change", key: "change", width: 10 },
+        { header: "New Balance", key: "newStock", width: 12 },
+        { header: "Reason", key: "reason", width: 15 },
+        { header: "Supplier", key: "supplier", width: 20 },
+        { header: "Remarks", key: "remarks", width: 30 },
+        { header: "Logged By", key: "performer", width: 15 },
+      ];
+
+      // Format headers
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE2E8F0" }, // slate-200
+      };
+
+      // Add data
+      filteredLogs.forEach((log) => {
+        const dateObj = new Date(log.createdAt);
+        worksheet.addRow({
+          date: dateObj.toLocaleDateString(),
+          time: dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          itemName: log.inventoryItem?.name || "N/A",
+          refId: log.id,
+          change: log.change > 0 ? `+${log.change}` : log.change,
+          newStock: log.newStock,
+          reason: log.reason.replace("_", " "),
+          supplier: log.supplier?.name || "-",
+          remarks: log.remarks || "-",
+          performer: log.performer?.name || "System",
+        });
+      });
+
+      // Styling rows
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) {
+          const changeCell = row.getCell("change");
+          if (typeof changeCell.value === 'string' && changeCell.value.startsWith("+")) {
+            changeCell.font = { color: { argb: "FF059669" } }; // emerald-600
+          } else if (typeof changeCell.value === 'number' && changeCell.value < 0) {
+            changeCell.font = { color: { argb: "FFE11D48" } }; // rose-600
+          }
+        }
+      });
+
+      // Buffer and Save
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `Stock_Journal_${new Date().toISOString().split('T')[0]}.xlsx`;
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export failed:", error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
-    <div className="max-w-6xl mx-auto py-10 px-6 animate-in fade-in duration-500 pb-20">
+    <div className="max-w-[1400px] mx-auto px-6 md:px-10 py-8 space-y-8 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-4">
         <div className="flex items-center gap-6">
           <button
             onClick={() => navigate(-1)}
@@ -122,35 +198,52 @@ export default function StockJournal() {
           >
             <ArrowLeft size={20} />
           </button>
-          <div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-              {pageHeader.icon}
-              {pageHeader.title}
-            </h1>
-            <p className="text-slate-500 font-bold mt-1 ml-1">
-              {pageHeader.subtitle}
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-1 bg-indigo-600 rounded-full" />
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
+                {pageHeader.title}
+              </h1>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">
+                {pageHeader.subtitle}
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Date Filter Toolbar */}
-        <div className="flex items-center bg-white p-2 rounded-2xl border border-slate-200 shadow-sm self-start md:self-center">
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onChange={(start, end) => {
-              setStartDate(start);
-              setEndDate(end);
-            }}
-          />
-          <div className="w-px h-6 bg-slate-200 mx-2"></div>
+        <div className="flex items-center gap-3 self-start md:self-center">
           <button
-            onClick={handleResetDates}
-            className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition-all"
-            title="Reset to current month"
+            onClick={handleExport}
+            disabled={exporting || filteredLogs.length === 0}
+            className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed group active:scale-95"
           >
-            <RotateCcw size={18} />
+            {exporting ? (
+              <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+            ) : (
+              <Download size={18} className="group-hover:scale-110 transition-transform" />
+            )}
+            {exporting ? "Exporting..." : "Export Excel"}
           </button>
+
+          <div className="flex items-center bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onChange={(start, end) => {
+                setStartDate(start);
+                setEndDate(end);
+              }}
+            />
+            <div className="w-px h-6 bg-slate-200 mx-2"></div>
+            <button
+              onClick={handleResetDates}
+              className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition-all"
+              title="Reset to current month"
+            >
+              <RotateCcw size={18} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -245,8 +338,8 @@ export default function StockJournal() {
                       <div className="flex flex-col items-start gap-1">
                         <div
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-black border ${log.change > 0
-                              ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                              : "bg-rose-50 text-rose-600 border-rose-100"
+                            ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                            : "bg-rose-50 text-rose-600 border-rose-100"
                             }`}
                         >
                           {log.change > 0 ? (
@@ -268,10 +361,10 @@ export default function StockJournal() {
                       <div className="flex flex-col gap-3 items-start">
                         <span
                           className={`text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest border ${log.reason === "STOCK_IN"
-                              ? "bg-blue-50 text-blue-600 border-blue-100"
-                              : log.reason === "ADJUSTMENT"
-                                ? "bg-amber-50 text-amber-600 border-amber-100"
-                                : "bg-slate-50 text-slate-500 border-slate-100"
+                            ? "bg-blue-50 text-blue-600 border-blue-100"
+                            : log.reason === "ADJUSTMENT"
+                              ? "bg-amber-50 text-amber-600 border-amber-100"
+                              : "bg-slate-50 text-slate-500 border-slate-100"
                             }`}
                         >
                           {log.reason.replace("_", " ")}

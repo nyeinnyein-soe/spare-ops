@@ -59,11 +59,11 @@ export default function Staff() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-[1400px] mx-auto px-6 md:px-10 py-8 space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold text-slate-800 tracking-tight">
-          Staff Account Management
-        </h2>
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
+          Staff Directory
+        </h1>
         <button
           onClick={() => setIsAdding(!isAdding)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition-all shadow-xl shadow-indigo-100"

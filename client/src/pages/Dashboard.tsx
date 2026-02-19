@@ -28,7 +28,7 @@ export default function Dashboard() {
       : usages;
 
   return (
-    <>
+    <div className="max-w-[1400px] mx-auto px-6 md:px-10 py-8 space-y-8 animate-in fade-in duration-500">
       {currentUser?.role === "sales" ? (
         <SalesDashboardView
           requests={myRequests}
@@ -43,6 +43,6 @@ export default function Dashboard() {
           onRefresh={refreshData}
         />
       )}
-    </>
+    </div>
   );
 }

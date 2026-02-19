@@ -260,34 +260,38 @@ export default function Merchants() {
     if (loading) return <div className="p-8">Loading...</div>;
 
     return (
-        <div className="space-y-6 p-6 pb-24">
-            {/* Sticky Header Section */}
-            <div className="sticky top-0 z-20 -mx-6 px-6 py-4 bg-slate-50 border-b border-slate-200">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h1 className="text-2xl font-black tracking-tight flex items-center gap-2 text-slate-900">
-                        <Building className="w-8 h-8 text-indigo-600" />
+        <div className="max-w-[1400px] mx-auto px-6 md:px-10 py-8 space-y-8 animate-in fade-in duration-500">
+            {/* Page Header Section */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-1 bg-indigo-600 rounded-full" />
+                    <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
                         Merchants & Shops
                     </h1>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <label className={`flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold text-sm rounded-xl hover:bg-emerald-700 cursor-pointer shadow-lg shadow-emerald-100 transition-all ${importLoading ? "opacity-50 pointer-events-none" : ""}`}>
-                            {importLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-                            {importLoading ? "Importing..." : "Bulk Import"}
-                            <input
-                                type="file"
-                                accept=".xlsx"
-                                className="hidden"
-                                onChange={handleExcelImport}
-                                disabled={importLoading}
-                            />
-                        </label>
-                        <button
-                            onClick={() => openMerchantModal()}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
-                        >
-                            <Plus className="w-4 h-4" /> Add Merchant
-                        </button>
-                    </div>
                 </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    <label className={`flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold text-sm rounded-xl hover:bg-emerald-700 cursor-pointer shadow-lg shadow-emerald-100 transition-all ${importLoading ? "opacity-50 pointer-events-none" : ""}`}>
+                        {importLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+                        {importLoading ? "Importing..." : "Bulk Import"}
+                        <input
+                            type="file"
+                            accept=".xlsx"
+                            className="hidden"
+                            onChange={handleExcelImport}
+                            disabled={importLoading}
+                        />
+                    </label>
+                    <button
+                        onClick={() => openMerchantModal()}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+                    >
+                        <Plus className="w-4 h-4" /> Add Merchant
+                    </button>
+                </div>
+            </div>
+
+            {/* Sticky Search Section */}
+            <div className="sticky top-0 z-20 -mx-6 md:-mx-10 px-6 md:px-10 py-4 bg-slate-50 border-b border-slate-200">
 
                 {/* Sub-Header with Search and Controls */}
                 <div className="flex flex-col sm:flex-row items-center gap-4 mt-6">

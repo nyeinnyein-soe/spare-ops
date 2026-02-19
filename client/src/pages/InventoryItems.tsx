@@ -100,14 +100,14 @@ export default function InventoryItems() {
 
   return (
     <div className="min-h-full pb-20">
-      <div className="max-w-[1400px] mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="max-w-[1400px] mx-auto px-6 md:px-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pt-8">
           <div>
             <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm uppercase tracking-[0.2em] mb-2">
               <div className="w-8 h-[2px] bg-indigo-600 rounded-full" />
               Stock Central
             </div>
-            <h1 className="text-5xl font-black text-slate-900 tracking-tight leading-none">
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
               Inventory
             </h1>
           </div>
@@ -135,7 +135,7 @@ export default function InventoryItems() {
           </div>
         </header>
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-6">
           <SummaryCard
             label="Total Parts"
             value={stats.total}
