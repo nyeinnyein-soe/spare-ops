@@ -15,6 +15,8 @@ import {
   Bell,
   Building,
   Truck,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useData } from "../contexts/DataContext";
@@ -33,6 +35,9 @@ export default function MainLayout() {
   const location = useLocation();
 
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [showReports, setShowReports] = useState(
+    location.pathname.startsWith("/reports"),
+  );
   const notifRef = useRef<HTMLDivElement>(null);
 
   if (!currentUser) {
@@ -52,6 +57,12 @@ export default function MainLayout() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (location.pathname.startsWith("/reports")) {
+      setShowReports(true);
+    }
+  }, [location.pathname]);
+
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -70,10 +81,11 @@ export default function MainLayout() {
     return (
       <button
         onClick={() => navigate(path)}
-        className={`flex items-center gap-3 px-3 py-3 rounded-2xl transition-all ${isActive
-          ? "bg-indigo-600 text-white shadow-xl shadow-indigo-100"
-          : "text-slate-600 hover:bg-slate-100"
-          }`}
+        className={`flex items-center gap-3 px-3 py-3 rounded-2xl transition-all ${
+          isActive
+            ? "bg-indigo-600 text-white shadow-xl shadow-indigo-100"
+            : "text-slate-600 hover:bg-slate-100"
+        }`}
       >
         {icon}
         <span className="font-bold text-sm tracking-tight">{label}</span>
@@ -84,7 +96,6 @@ export default function MainLayout() {
   return (
     <div className="min-h-full flex flex-col md:flex-row bg-slate-50 relative overflow-x-hidden">
       <Toast message={toast.msg} show={toast.show} type={toast.type} />
-
 
       <nav className="w-full md:w-64 bg-slate-50 md:bg-white border-r border-slate-200 p-4 flex flex-col gap-2 shadow-sm shrink-0 z-30">
         <div className="flex items-center gap-2 px-2 py-4 mb-4 border-b border-slate-200/60">
@@ -123,11 +134,78 @@ export default function MainLayout() {
               icon={<UsersIcon size={20} />}
               label="Staff Directory"
             />
-            <NavItem
-              path="/reports"
-              icon={<FileText size={20} />}
-              label="Audit Reports"
-            />
+
+            {/* Reports Accordion */}
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => {
+                  const reportsPaths = [
+                    "/reports/requisitions",
+                    "/reports/deployments",
+                    "/reports/stock",
+                    "/reports/transactions",
+                  ];
+                  const isOnReport = reportsPaths.some(
+                    (p) => location.pathname === p,
+                  );
+                  if (isOnReport) {
+                    // If we are already on a report page, just toggle
+                    setShowReports(!showReports);
+                  } else {
+                    // If we are not on a report page, open accordion and navigate to first one
+                    setShowReports(true);
+                    navigate("/reports/requisitions");
+                  }
+                }}
+                className={`flex items-center justify-between px-3 py-3 rounded-2xl transition-all ${
+                  location.pathname.startsWith("/reports")
+                    ? "bg-slate-100 text-indigo-600"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <FileText size={20} />
+                  <span className="font-bold text-sm tracking-tight">
+                    Audit Reports
+                  </span>
+                </div>
+                {showReports ? (
+                  <ChevronDown size={14} />
+                ) : (
+                  <ChevronRight size={14} />
+                )}
+              </button>
+
+              {showReports && (
+                <div className="flex flex-col gap-1 ml-9 mt-1 animate-in slide-in-from-top-1 duration-200">
+                  <button
+                    onClick={() => navigate("/reports/requisitions")}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all text-left ${location.pathname === "/reports/requisitions" ? "text-indigo-600 bg-indigo-50" : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"}`}
+                  >
+                    Requisitions
+                  </button>
+                  <button
+                    onClick={() => navigate("/reports/deployments")}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all text-left ${location.pathname === "/reports/deployments" ? "text-indigo-600 bg-indigo-50" : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"}`}
+                  >
+                    Deployments
+                  </button>
+                  <button
+                    onClick={() => navigate("/reports/stock")}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all text-left ${location.pathname === "/reports/stock" ? "text-indigo-600 bg-indigo-50" : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"}`}
+                  >
+                    Stock Summary
+                  </button>
+                  <button
+                    onClick={() => navigate("/reports/transactions")}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all text-left ${location.pathname === "/reports/transactions" ? "text-indigo-600 bg-indigo-50" : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"}`}
+                  >
+                    Stock Transactions
+                  </button>
+                </div>
+              )}
+            </div>
+
             <NavItem
               path="/merchants"
               icon={<Building size={20} />}

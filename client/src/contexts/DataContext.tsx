@@ -5,6 +5,7 @@ import {
   UsageRecord,
   NotificationItem,
   InventoryItem,
+  Supplier,
 } from "../types";
 import { db } from "../services/dbService";
 import { useAuth } from "./AuthContext";
@@ -17,6 +18,7 @@ interface DataContextType {
   usages: UsageRecord[];
   notifications: NotificationItem[];
   inventoryItems: InventoryItem[];
+  suppliers: Supplier[];
   stockLogs: any[]; // Ideally use StockLog type
   loading: boolean;
   refreshData: () => Promise<void>;
@@ -36,6 +38,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [usages, setUsages] = useState<UsageRecord[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [stockLogs, setStockLogs] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(false);
@@ -64,12 +67,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     if (!isBackground) setLoading(true);
     try {
-      const [u, r, usg, n, inv, logs] = await Promise.all([
+      const [u, r, usg, n, inv, sup, logs] = await Promise.all([
         db.users.select(),
         db.requests.select(),
         db.usages.select(),
         db.notifications.select(),
         db.inventory.select(),
+        db.suppliers.getAll(),
         db.inventory.getStockLogs(),
       ]);
 
@@ -77,6 +81,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setRequests(r || []);
       setUsages(usg || []);
       setInventoryItems(inv || []);
+      setSuppliers(sup || []);
       setStockLogs(logs || []);
       // ... existing background check logic ...
 
@@ -124,6 +129,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setUsages([]);
       setNotifications([]);
       setInventoryItems([]);
+      setSuppliers([]);
     }
   }, [currentUser]);
 
@@ -135,6 +141,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         usages,
         notifications,
         inventoryItems,
+        suppliers,
         stockLogs,
         loading,
         refreshData: () => syncData(true),

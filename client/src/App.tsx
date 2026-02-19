@@ -8,7 +8,10 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import Staff from "./pages/Staff";
-import Reports from "./pages/Reports";
+import RequisitionsReport from "./pages/RequisitionsReport";
+import DeploymentsReport from "./pages/DeploymentsReport";
+import StockReport from "./pages/StockReport";
+import StockTransactionReport from "./pages/StockTransactionReport";
 import NewRequest from "./pages/NewRequest";
 import Insights from "./pages/Insights";
 import InventoryItems from "./pages/InventoryItems";
@@ -44,7 +47,10 @@ export default function App() {
               {/* Admin & Manager Only */}
               <Route element={<ProtectedRoute allowedRoles={["admin", "manager"]} />}>
                 <Route path="/staff" element={<Staff />} />
-                <Route path="/reports" element={<Reports />} />
+                <Route path="/reports/requisitions" element={<RequisitionsReport />} />
+                <Route path="/reports/deployments" element={<DeploymentsReport />} />
+                <Route path="/reports/stock" element={<StockReport />} />
+                <Route path="/reports/transactions" element={<StockTransactionReport />} />
                 <Route path="/inventory-items" element={<InventoryItems />} />
                 <Route path="/merchants" element={<Merchants />} />
                 <Route path="/suppliers" element={<Suppliers />} />

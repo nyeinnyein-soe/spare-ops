@@ -7,9 +7,10 @@ interface DateRangePickerProps {
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
   onChange: (start: string, end: string) => void;
+  className?: string;
 }
 
-export default function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps) {
+export default function DateRangePicker({ startDate, endDate, onChange, className = "w-80" }: DateRangePickerProps) {
   // Parse YYYY-MM-DD strings to Local Date objects safely
   const parseDate = (dateStr: string) => {
     if (!dateStr) return null;
@@ -35,7 +36,7 @@ export default function DateRangePicker({ startDate, endDate, onChange }: DateRa
   };
 
   return (
-    <div className="relative group flex items-center">
+    <div className={`relative group flex items-center ${className}`}>
       <CalendarIcon
         size={16}
         className="absolute left-3.5 text-slate-400 group-hover:text-blue-600 transition-colors pointer-events-none z-10"
@@ -48,7 +49,7 @@ export default function DateRangePicker({ startDate, endDate, onChange }: DateRa
         monthsShown={2}
         dateFormat="MMM d, yyyy"
         placeholderText="Select date range"
-        className="w-80 pl-12 pr-4 py-3 text-sm font-bold text-slate-800 bg-white border border-slate-200 rounded-2xl outline-none cursor-pointer tracking-tight shadow-sm hover:border-blue-500 transition-all"
+        className="w-full pl-12 pr-4 py-3 text-sm font-bold text-slate-800 bg-white border border-slate-200 rounded-2xl outline-none cursor-pointer tracking-tight shadow-sm hover:border-blue-500 transition-all"
 
         // --- THE FIXES ---
         popperContainer={({ children }) => createPortal(children, document.body)}
