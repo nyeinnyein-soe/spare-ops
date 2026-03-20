@@ -38,7 +38,8 @@ export const getUsages = async (req: Request, res: Response) => {
 
 export const createUsage = async (req: Request, res: Response) => {
   try {
-    const { shopId, inventoryItemId, salespersonId, voucherImage, remarks } = req.body;
+    const { shopId, inventoryItemId, salespersonId, voucherImage, remarks } =
+      req.body;
 
     // Create the usage record
     const usage = await prisma.usage.create({
@@ -65,11 +66,11 @@ export const createUsage = async (req: Request, res: Response) => {
 
     // Send Telegram Notification (Fire and forget, non-blocking)
     sendTelegramMessage(
-      `🔧 <b>New Part Deployment</b>\n\n` +
-      `<b>Staff:</b> ${usage.salesperson.name}\n` +
-      `<b>Part:</b> ${usage.inventoryItem.name}\n` +
-      `<b>Shop:</b> ${usage.shop.name}\n` +
-      `<b>Remark:</b> ${remarks || "No remarks"}`
+      `🔧 <b>New Deployment</b>\n\n` +
+        `<b>Staff:</b> ${usage.salesperson.name}\n` +
+        `<b>Part:</b> ${usage.inventoryItem.name}\n` +
+        `<b>Shop:</b> ${usage.shop.name}\n` +
+        `<b>Remark:</b> ${remarks || "No remarks"}`,
     );
 
     res.status(201).json({ message: "Usage logged" });
