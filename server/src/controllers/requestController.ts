@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../db";
 import { sendNotification } from "./notificationController";
 import logger from "../utils/logger";
+import { sendTelegramMessage } from "../utils/telegram";
 
 export const getRequests = async (req: Request, res: Response) => {
   try {
@@ -61,6 +62,16 @@ export const createRequest = async (req: Request, res: Response) => {
       where: { id: requesterId },
     });
 
+    // Fetch item names for the Telegram notification
+    const itemDetails = await Promise.all(
+      items.map(async (item: any) => {
+        const invItem = await prisma.inventoryItem.findUnique({
+          where: { id: item.inventoryItemId },
+        });
+        return `${invItem?.name || "Unknown"} (Qty: ${item.quantity})`;
+      })
+    );
+
     for (const manager of managers) {
       await sendNotification(
         manager.id,
@@ -68,6 +79,14 @@ export const createRequest = async (req: Request, res: Response) => {
         `${requester?.name || "Staff"} requested new stock.`,
       );
     }
+
+    // Send Telegram Notification to Admin Group (Fire and forget, non-blocking)
+    sendTelegramMessage(
+      `📦 <b>New Requisition</b>\n\n` +
+      `<b>Requester:</b> ${requester?.name || "Staff"}\n` +
+      `<b>Items:</b>\n- ${itemDetails.join("\n- ")}\n\n` +
+      `<b>Status:</b> PENDING approval.`
+    );
 
     res.status(201).json({ message: "Request created" });
   } catch (error) {

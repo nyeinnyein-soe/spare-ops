@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../db";
 import logger from "../utils/logger";
 import { sendNotification } from "./notificationController";
+import { sendTelegramMessage } from "../utils/telegram";
 
 export const getUsages = async (req: Request, res: Response) => {
   try {
@@ -61,6 +62,15 @@ export const createUsage = async (req: Request, res: Response) => {
         `${usage.salesperson.name} deployed ${usage.inventoryItem.name} at ${usage.shop.name}.`,
       );
     }
+
+    // Send Telegram Notification (Fire and forget, non-blocking)
+    sendTelegramMessage(
+      `🔧 <b>New Part Deployment</b>\n\n` +
+      `<b>Staff:</b> ${usage.salesperson.name}\n` +
+      `<b>Part:</b> ${usage.inventoryItem.name}\n` +
+      `<b>Shop:</b> ${usage.shop.name}\n` +
+      `<b>Remark:</b> ${remarks || "No remarks"}`
+    );
 
     res.status(201).json({ message: "Usage logged" });
   } catch (error) {
